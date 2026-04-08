@@ -1,0 +1,27 @@
+{
+  "$schema": "https://companion-module-base.pages.dev/schema/manifest.schema.json",
+  "id": "open-live",
+  "name": "Open Live",
+  "shortname": "Open Live",
+  "description": "Control Open Live broadcast production platform. Supports cuts, transitions, graphics, DSK, macros and tally feedback.",
+  "version": "1.0.0",
+  "license": "MIT",
+  "repository": "https://github.com/Eyevinn/open-live-companion-module",
+  "bugs": "https://github.com/Eyevinn/open-live-companion-module/issues",
+  "maintainers": [
+    {
+      "name": "Open Live contributors",
+      "github": "Eyevinn"
+    }
+  ],
+  "legacyIds": [],
+  "manufacturer": "Eyevinn Technology",
+  "products": ["Open Live"],
+  "keywords": ["open-live", "live", "broadcast", "production", "vision-mixer"],
+  "runtime": {
+    "type": "node18",
+    "api": "nodejs-ipc",
+    "apiVersion": "^1.12.0",
+    "entrypoint": "dist/main.js"
+  }
+}
