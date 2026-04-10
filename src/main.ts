@@ -50,6 +50,8 @@ export interface ModuleState {
 	pgm: string | null
 	pvw: string | null
 	onAir: boolean
+	ftbActive: boolean
+	ovlAlpha: number // 0.0–1.0
 	graphics: Record<string, boolean>
 	dskLayers: Record<number, boolean>
 }
@@ -63,6 +65,8 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		pgm: null,
 		pvw: null,
 		onAir: false,
+		ftbActive: false,
+		ovlAlpha: 1,
 		graphics: {},
 		dskLayers: {},
 	}
@@ -152,7 +156,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		this.setVariableDefinitions(getVariableDefinitions())
 
 		this.setActionDefinitions(
-			getActionDefinitions(this.wsClient, () => this.wsClient, this.production),
+			getActionDefinitions(this.wsClient, () => this.wsClient, this.production, () => this.state),
 		)
 
 		this.setFeedbackDefinitions(
@@ -167,6 +171,8 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			pvw_source: this.state.pvw ?? '',
 			on_air: String(this.state.onAir),
 			production_name: this.production?.name ?? '',
+			ftb_active: 'false',
+			ovl_alpha: String(this.state.ovlAlpha),
 		})
 	}
 
@@ -222,6 +228,17 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 				this.checkFeedbacks('dsk_visible')
 				break
 			}
+			case 'FTB_STATE': {
+				this.state.ftbActive = msg.active
+				this.setVariableValues({ ftb_active: String(msg.active) })
+				this.checkFeedbacks('ftb_active')
+				break
+			}
+			case 'OVL_STATE': {
+				this.state.ovlAlpha = msg.alpha
+				this.setVariableValues({ ovl_alpha: String(msg.alpha) })
+				break
+			}
 			case 'MACRO_EXECUTED': {
 				this.log('debug', `Macro executed: ${msg.macroId}`)
 				break
@@ -231,7 +248,14 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 				break
 			}
 			case 'ERROR': {
-				this.log('error', `Server error: ${msg.error}`)
+				if (msg.error === 'Production not found') {
+					this.log('error', `Production "${this.config.productionId}" not found — check module config. Stopping reconnection.`)
+					this.updateStatus(InstanceStatus.BadConfig, 'Production not found')
+					this.wsClient?.destroy()
+					this.wsClient = null
+				} else {
+					this.log('error', `Server error: ${msg.error}`)
+				}
 				break
 			}
 			default: {

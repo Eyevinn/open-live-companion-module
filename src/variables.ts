@@ -18,5 +18,13 @@ export function getVariableDefinitions(): CompanionVariableDefinition[] {
 			variableId: 'production_name',
 			name: 'Name of connected production',
 		},
+		{
+			variableId: 'ftb_active',
+			name: 'Fade to Black Active (true/false)',
+		},
+		{
+			variableId: 'ovl_alpha',
+			name: 'Overlay Alpha (0.0–1.0)',
+		},
 	]
 }

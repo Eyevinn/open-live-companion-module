@@ -1,12 +1,12 @@
-import { combineRgb } from '@companion-module/base'
 import type { CompanionActionDefinitions } from '@companion-module/base'
 import type { WsClient } from './ws-client.js'
-import type { ProductionDoc } from './main.js'
+import type { ProductionDoc, ModuleState } from './main.js'
 
 export function getActionDefinitions(
 	wsClient: WsClient | null,
 	getWsClient: () => WsClient | null,
 	production: ProductionDoc | null,
+	getState: () => ModuleState,
 ): CompanionActionDefinitions {
 	const sources = production?.sources ?? []
 	const graphics = production?.graphics ?? []
@@ -24,6 +24,18 @@ export function getActionDefinitions(
 			client.send(msg)
 		}
 	}
+
+	const transitionTypeChoices = [
+		{ id: 'mix', label: 'Mix' },
+		{ id: 'dip', label: 'Dip' },
+		{ id: 'push', label: 'Push' },
+	]
+
+	const ftbModeChoices = [
+		{ id: 'toggle', label: 'Toggle' },
+		{ id: 'on', label: 'Force On' },
+		{ id: 'off', label: 'Force Off' },
+	]
 
 	return {
 		cut: {
@@ -43,6 +55,23 @@ export function getActionDefinitions(
 			},
 		},
 
+		set_pvw: {
+			name: 'Load Source to Preview',
+			options: [
+				{
+					id: 'sourceId',
+					type: 'dropdown',
+					label: 'Source',
+					choices: sourceChoices.length > 0 ? sourceChoices : [{ id: '', label: '(no sources)' }],
+					default: sourceChoices[0]?.id ?? '',
+					allowCustom: true,
+				},
+			],
+			callback: (action) => {
+				send({ type: 'SET_PVW', sourceId: String(action.options['sourceId'] ?? '') })
+			},
+		},
+
 		transition: {
 			name: 'Transition to Source',
 			options: [
@@ -56,15 +85,16 @@ export function getActionDefinitions(
 				},
 				{
 					id: 'transitionType',
-					type: 'textinput',
+					type: 'dropdown',
 					label: 'Transition Type',
+					choices: transitionTypeChoices,
 					default: 'mix',
 				},
 				{
 					id: 'durationMs',
 					type: 'number',
 					label: 'Duration (ms)',
-					default: 500,
+					default: 1000,
 					min: 0,
 					max: 10000,
 				},
@@ -74,7 +104,41 @@ export function getActionDefinitions(
 					type: 'TRANSITION',
 					sourceId: String(action.options['sourceId'] ?? ''),
 					transitionType: String(action.options['transitionType'] ?? 'mix'),
-					durationMs: Number(action.options['durationMs'] ?? 500),
+					durationMs: Number(action.options['durationMs'] ?? 1000),
+				})
+			},
+		},
+
+		auto: {
+			name: 'Auto (Transition Current PVW to PGM)',
+			options: [
+				{
+					id: 'transitionType',
+					type: 'dropdown',
+					label: 'Transition Type',
+					choices: transitionTypeChoices,
+					default: 'mix',
+				},
+				{
+					id: 'durationMs',
+					type: 'number',
+					label: 'Duration (ms)',
+					default: 1000,
+					min: 0,
+					max: 10000,
+				},
+			],
+			callback: (action) => {
+				const pvw = getState().pvw
+				if (!pvw) {
+					// Nothing on PVW — no-op
+					return
+				}
+				send({
+					type: 'TRANSITION',
+					sourceId: pvw,
+					transitionType: String(action.options['transitionType'] ?? 'mix'),
+					durationMs: Number(action.options['durationMs'] ?? 1000),
 				})
 			},
 		},
@@ -84,6 +148,55 @@ export function getActionDefinitions(
 			options: [],
 			callback: () => {
 				send({ type: 'TAKE' })
+			},
+		},
+
+		ftb: {
+			name: 'Fade to Black',
+			options: [
+				{
+					id: 'mode',
+					type: 'dropdown',
+					label: 'Mode',
+					choices: ftbModeChoices,
+					default: 'toggle',
+				},
+				{
+					id: 'durationMs',
+					type: 'number',
+					label: 'Duration (ms)',
+					default: 1000,
+					min: 0,
+					max: 10000,
+				},
+			],
+			callback: (action) => {
+				const mode = String(action.options['mode'] ?? 'toggle')
+				const durationMs = Number(action.options['durationMs'] ?? 1000)
+				if (mode === 'on') {
+					send({ type: 'FTB', active: true, durationMs })
+				} else if (mode === 'off') {
+					send({ type: 'FTB', active: false, durationMs })
+				} else {
+					send({ type: 'FTB', durationMs })
+				}
+			},
+		},
+
+		set_ovl_alpha: {
+			name: 'Set Overlay Alpha',
+			options: [
+				{
+					id: 'alpha',
+					type: 'number',
+					label: 'Overlay Alpha %',
+					default: 100,
+					min: 0,
+					max: 100,
+				},
+			],
+			callback: (action) => {
+				send({ type: 'SET_OVL', alpha: Number(action.options['alpha'] ?? 100) / 100 })
 			},
 		},
 
@@ -190,6 +303,3 @@ export function getActionDefinitions(
 		},
 	}
 }
-
-// Suppress unused import warning — combineRgb is imported for potential future use in action feedback
-void combineRgb
