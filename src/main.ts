@@ -9,11 +9,9 @@ import { getVariableDefinitions } from './variables.js'
 import { getActionDefinitions } from './actions.js'
 import { getFeedbackDefinitions } from './feedbacks.js'
 import { getPresetDefinitions } from './presets.js'
-import * as http from 'http'
 
 export interface ModuleConfig {
-	host: string
-	port: number
+	baseUrl: string
 	productionId: string
 }
 
@@ -59,7 +57,7 @@ export interface ModuleState {
 class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	private wsClient: WsClient | null = null
 	private production: ProductionDoc | null = null
-	private config: ModuleConfig = { host: 'localhost', port: 3000, productionId: '' }
+	private config: ModuleConfig = { baseUrl: 'http://localhost:3000', productionId: '' }
 
 	private state: ModuleState = {
 		pgm: null,
@@ -91,19 +89,11 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		return [
 			{
 				type: 'textinput',
-				id: 'host',
-				label: 'Host',
-				default: 'localhost',
-				width: 8,
-			},
-			{
-				type: 'number',
-				id: 'port',
-				label: 'Port',
-				default: 3000,
-				min: 1,
-				max: 65535,
-				width: 4,
+				id: 'baseUrl',
+				label: 'API Base URL',
+				default: 'http://localhost:3000',
+				width: 12,
+				tooltip: 'Base URL of the Open Live API, e.g. https://36e888958c.apps.osaas.io or http://localhost:3000',
 			},
 			{
 				type: 'textinput',
@@ -121,16 +111,16 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	// -----------------------------------------------------------------------
 
 	private async _setup(): Promise<void> {
-		const { host, port, productionId } = this.config
+		const { baseUrl, productionId } = this.config
 
-		if (!host || !productionId) {
-			this.updateStatus(InstanceStatus.BadConfig, 'Host and Production ID are required')
+		if (!baseUrl || !productionId) {
+			this.updateStatus(InstanceStatus.BadConfig, 'API Base URL and Production ID are required')
 			return
 		}
 
 		// Fetch production details from REST
 		try {
-			this.production = await this._fetchProduction(host, port, productionId)
+			this.production = await this._fetchProduction(baseUrl, productionId)
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err)
 			this.log('warn', `Failed to fetch production: ${msg}`)
@@ -141,8 +131,9 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		// Register definitions (even if production fetch failed, to give empty dropdowns)
 		this._registerDefinitions()
 
-		// Open WebSocket
-		this._openWebSocket(host, port, productionId)
+		// Open WebSocket — derive WSS/WS URL from base URL (http→ws, https→wss)
+		const wsUrl = baseUrl.replace(/^http/, 'ws') + `/ws/productions/${encodeURIComponent(productionId)}/controller`
+		this._openWebSocket(wsUrl)
 	}
 
 	private _teardown(): void {
@@ -176,8 +167,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		})
 	}
 
-	private _openWebSocket(host: string, port: number, productionId: string): void {
-		const url = `ws://${host}:${port}/ws/productions/${productionId}/controller`
+	private _openWebSocket(url: string): void {
 		this.log('debug', `Connecting to WebSocket: ${url}`)
 
 		const client = new WsClient(url)
@@ -264,45 +254,22 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		}
 	}
 
-	private _fetchProduction(host: string, port: number, productionId: string): Promise<ProductionDoc> {
-		return new Promise<ProductionDoc>((resolve, reject) => {
-			const options: http.RequestOptions = {
-				hostname: host,
-				port,
-				path: `/api/v1/productions/${encodeURIComponent(productionId)}`,
-				method: 'GET',
+	private async _fetchProduction(baseUrl: string, productionId: string): Promise<ProductionDoc> {
+		const url = `${baseUrl}/api/v1/productions/${encodeURIComponent(productionId)}`
+		const controller = new AbortController()
+		const timeout = setTimeout(() => controller.abort(), 5000)
+		try {
+			const res = await fetch(url, {
 				headers: { Accept: 'application/json' },
+				signal: controller.signal,
+			})
+			if (!res.ok) {
+				throw new Error(`HTTP ${res.status} from REST API`)
 			}
-
-			const req = http.request(options, (res) => {
-				let raw = ''
-				res.on('data', (chunk: Buffer) => {
-					raw += chunk.toString()
-				})
-				res.on('end', () => {
-					if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-						try {
-							const doc = JSON.parse(raw) as ProductionDoc
-							resolve(doc)
-						} catch (e) {
-							reject(new Error(`Failed to parse production JSON: ${String(e)}`))
-						}
-					} else {
-						reject(new Error(`HTTP ${res.statusCode ?? 'unknown'} from REST API`))
-					}
-				})
-			})
-
-			req.on('error', (err: Error) => {
-				reject(err)
-			})
-
-			req.setTimeout(5000, () => {
-				req.destroy(new Error('Request timeout'))
-			})
-
-			req.end()
-		})
+			return (await res.json()) as ProductionDoc
+		} finally {
+			clearTimeout(timeout)
+		}
 	}
 }
 
