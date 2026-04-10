@@ -56,12 +56,14 @@ export interface ModuleState {
 }
 
 const POLL_INTERVAL_MS = 10_000
+const RETRY_SETUP_MS = 15_000
 
 class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	private wsClient: WsClient | null = null
 	private selectedProduction: ProductionDoc | null = null
 	private config: ModuleConfig = { apiUrl: 'http://localhost:3000' }
 	private pollTimer: ReturnType<typeof setInterval> | null = null
+	private retryTimer: ReturnType<typeof setTimeout> | null = null
 
 	private state: ModuleState = {
 		productions: [],
@@ -88,12 +90,14 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	async destroy(): Promise<void> {
 		this._teardownWs()
 		this._stopPolling()
+		this._cancelRetry()
 	}
 
 	async configUpdated(config: ModuleConfig): Promise<void> {
 		this.config = config
 		this._teardownWs()
 		this._stopPolling()
+		this._cancelRetry()
 		await this._setup()
 	}
 
@@ -126,10 +130,12 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			const all = await this._fetchProductions(apiUrl)
 			this.state.productions = all.filter((p) => p.status === 'active')
 			this.updateStatus(InstanceStatus.Ok)
+			this._cancelRetry()
 		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err)
+			const msg = this._extractErrorMessage(err)
 			this.log('warn', `Failed to fetch productions: ${msg}`)
 			this.updateStatus(InstanceStatus.ConnectionFailure, `Could not reach Open Live API: ${msg}`)
+			this._scheduleRetry()
 		}
 
 		this._registerLandingMode()
@@ -142,6 +148,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	public async selectProduction(productionId: string): Promise<void> {
 		this._teardownWs()
 		this._stopPolling()
+		this._cancelRetry()
 
 		const { apiUrl } = this.config
 
@@ -149,7 +156,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		try {
 			production = await this._fetchProduction(apiUrl, productionId)
 		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err)
+			const msg = this._extractErrorMessage(err)
 			this.log('error', `Failed to load production ${productionId}: ${msg}`)
 			this.updateStatus(InstanceStatus.ConnectionFailure, `Failed to load production: ${msg}`)
 			return
@@ -392,8 +399,46 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	}
 
 	// -----------------------------------------------------------------------
+	// Retry (landing mode only — reconnect when API becomes reachable)
+	// -----------------------------------------------------------------------
+
+	private _scheduleRetry(): void {
+		this._cancelRetry()
+		this.retryTimer = setTimeout(() => {
+			this.retryTimer = null
+			// Only retry if we're still in landing mode (no production selected)
+			if (!this.state.selectedProductionId) {
+				this.log('debug', `Retrying Open Live API connection…`)
+				void this._setup()
+			}
+		}, RETRY_SETUP_MS)
+	}
+
+	private _cancelRetry(): void {
+		if (this.retryTimer !== null) {
+			clearTimeout(this.retryTimer)
+			this.retryTimer = null
+		}
+	}
+
+	// -----------------------------------------------------------------------
 	// Misc
 	// -----------------------------------------------------------------------
+
+	private _extractErrorMessage(err: unknown): string {
+		if (!(err instanceof Error)) return String(err)
+		// Node.js fetch errors wrap the real cause (e.g. ECONNREFUSED) as err.cause
+		const cause = (err as NodeJS.ErrnoException & { cause?: unknown }).cause
+		if (cause instanceof Error) {
+			const code = (cause as NodeJS.ErrnoException).code
+			if (code === 'ECONNREFUSED') return 'Connection refused — is Open Live running?'
+			if (code === 'ENOTFOUND') return 'Host not found — check the URL'
+			if (code === 'ECONNRESET') return 'Connection reset'
+			return cause.message
+		}
+		if (err.name === 'AbortError') return 'Request timed out'
+		return err.message
+	}
 
 	private _resetControlState(): void {
 		this.state.pgm = null
