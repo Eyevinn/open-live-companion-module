@@ -5,7 +5,7 @@ import {
 	type SomeCompanionConfigField,
 } from '@companion-module/base'
 import { WsClient } from './ws-client.js'
-import { getVariableDefinitions } from './variables.js'
+import { getVariableDefinitions, emptySourceVars, sourceVarsFromList } from './variables.js'
 import { getActionDefinitions, type ActionCallbacks } from './actions.js'
 import { getFeedbackDefinitions } from './feedbacks.js'
 import { getLandingPresets, getControlPresets } from './presets.js'
@@ -61,7 +61,7 @@ const RETRY_SETUP_MS = 15_000
 class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	private wsClient: WsClient | null = null
 	private selectedProduction: ProductionDoc | null = null
-	private config: ModuleConfig = { apiUrl: 'http://localhost:3000' }
+	private config: ModuleConfig = { apiUrl: 'http://localhost:8080' }
 	private pollTimer: ReturnType<typeof setInterval> | null = null
 	private retryTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -107,7 +107,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 				type: 'textinput',
 				id: 'apiUrl',
 				label: 'Open Live URL',
-				default: 'http://localhost:3000',
+				default: 'http://localhost:8080',
 				width: 12,
 				tooltip: 'URL of the Open Live API — e.g. https://36e888958c.apps.osaas.io or http://localhost:3000',
 			},
@@ -162,13 +162,31 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			return
 		}
 
+		// Enrich source slots: API returns { sourceId, mixerInput }; we normalise to { id, name }
+		try {
+			const allSources = await this._fetchSources(apiUrl)
+			const sourceMap = new Map(allSources.map((s) => [s.id, s.name]))
+			production.sources = (production.sources as unknown as Array<{ sourceId: string }>).map((slot) => ({
+				id: slot.sourceId,
+				name: sourceMap.get(slot.sourceId) ?? slot.sourceId,
+				type: 'srt',
+			}))
+		} catch {
+			// Fallback: use sourceId as name
+			production.sources = (production.sources as unknown as Array<{ sourceId: string }>).map((slot) => ({
+				id: slot.sourceId,
+				name: slot.sourceId,
+				type: 'srt',
+			}))
+		}
+
 		this.selectedProduction = production
 		this.state.selectedProductionId = productionId
 		this._resetControlState()
 		this._registerControlMode()
 
-		// Derive WS URL: http→ws, https→wss
-		const wsUrl = apiUrl.replace(/^http/, 'ws') + `/ws/productions/${encodeURIComponent(productionId)}/controller`
+		// Derive WS URL: http→ws, https→wss, localhost→127.0.0.1
+		const wsUrl = this._normaliseUrl(apiUrl).replace(/^http/, 'ws') + `/ws/productions/${encodeURIComponent(productionId)}/controller`
 		this._openWebSocket(wsUrl)
 		this._startPolling()
 	}
@@ -209,7 +227,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		this.setActionDefinitions(
 			getActionDefinitions(() => this.wsClient, null, () => this.state, this._callbacks()),
 		)
-		this.setFeedbackDefinitions(getFeedbackDefinitions(() => this.state, null))
+		this.setFeedbackDefinitions(getFeedbackDefinitions(() => this.state, null, this.log.bind(this)))
 		this.setPresetDefinitions(getLandingPresets(this.state.productions))
 		this.setVariableValues({
 			selected_production_name: '',
@@ -219,6 +237,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			on_air: 'false',
 			ftb_active: 'false',
 			ovl_alpha: '1',
+			...emptySourceVars(),
 		})
 	}
 
@@ -227,8 +246,9 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		this.setActionDefinitions(
 			getActionDefinitions(() => this.wsClient, this.selectedProduction, () => this.state, this._callbacks()),
 		)
-		this.setFeedbackDefinitions(getFeedbackDefinitions(() => this.state, this.selectedProduction))
+		this.setFeedbackDefinitions(getFeedbackDefinitions(() => this.state, this.selectedProduction, this.log.bind(this)))
 		this.setPresetDefinitions(getControlPresets(this.selectedProduction))
+		this.log('debug', `Sources: ${JSON.stringify(this.selectedProduction?.sources?.map(s => `${s.name}(${s.id})`))}`)
 		this.setVariableValues({
 			selected_production_name: this.selectedProduction?.name ?? '',
 			production_name: this.selectedProduction?.name ?? '',
@@ -237,7 +257,11 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			on_air: 'false',
 			ftb_active: 'false',
 			ovl_alpha: '1',
+			...sourceVarsFromList(this.selectedProduction?.sources ?? []),
 		})
+		// Force Companion to re-evaluate all feedbacks now that definitions are registered.
+		this.log('debug', `Control mode registered — forcing checkFeedbacks`)
+		this.checkFeedbacks('pgm_tally', 'pvw_tally', 'on_air', 'ftb_active', 'graphic_active', 'dsk_visible')
 	}
 
 	// -----------------------------------------------------------------------
@@ -252,6 +276,8 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		client.on('connected', () => {
 			this.log('info', 'WebSocket connected')
 			this.updateStatus(InstanceStatus.Ok)
+			// Re-evaluate all feedbacks on (re)connect so stale state is cleared
+			this.checkFeedbacks('pgm_tally', 'pvw_tally', 'on_air', 'ftb_active', 'graphic_active', 'dsk_visible')
 		})
 
 		client.on('disconnected', () => {
@@ -276,6 +302,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	private _handleWsMessage(msg: import('./ws-client.js').WsInboundMessage): void {
 		switch (msg.type) {
 			case 'TALLY': {
+				this.log('info', `TALLY received — pgm: ${msg.pgm ?? 'null'}, pvw: ${msg.pvw ?? 'null'}`)
 				this.state.pgm = msg.pgm
 				this.state.pvw = msg.pvw
 				this.setVariableValues({ pgm_source: msg.pgm ?? '', pvw_source: msg.pvw ?? '' })
@@ -368,11 +395,18 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	// REST helpers
 	// -----------------------------------------------------------------------
 
+	/** Normalise the URL so Node.js doesn't try ::1 before 127.0.0.1 on macOS */
+	private _normaliseUrl(url: string): string {
+		return url.replace(/^(https?:\/\/)localhost\b/, '$1127.0.0.1')
+	}
+
 	private async _fetchProductions(apiUrl: string): Promise<ProductionDoc[]> {
+		const url = `${this._normaliseUrl(apiUrl)}/api/v1/productions`
+		this.log('debug', `Fetching productions from: ${url}`)
 		const ctrl = new AbortController()
 		const timeout = setTimeout(() => ctrl.abort(), 5000)
 		try {
-			const res = await fetch(`${apiUrl}/api/v1/productions`, {
+			const res = await fetch(url, {
 				headers: { Accept: 'application/json' },
 				signal: ctrl.signal,
 			})
@@ -383,11 +417,26 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		}
 	}
 
+	private async _fetchSources(apiUrl: string): Promise<Array<{ id: string; name: string }>> {
+		const ctrl = new AbortController()
+		const timeout = setTimeout(() => ctrl.abort(), 5000)
+		try {
+			const res = await fetch(`${this._normaliseUrl(apiUrl)}/api/v1/sources`, {
+				headers: { Accept: 'application/json' },
+				signal: ctrl.signal,
+			})
+			if (!res.ok) throw new Error(`HTTP ${res.status}`)
+			return (await res.json()) as Array<{ id: string; name: string }>
+		} finally {
+			clearTimeout(timeout)
+		}
+	}
+
 	private async _fetchProduction(apiUrl: string, productionId: string): Promise<ProductionDoc> {
 		const ctrl = new AbortController()
 		const timeout = setTimeout(() => ctrl.abort(), 5000)
 		try {
-			const res = await fetch(`${apiUrl}/api/v1/productions/${encodeURIComponent(productionId)}`, {
+			const res = await fetch(`${this._normaliseUrl(apiUrl)}/api/v1/productions/${encodeURIComponent(productionId)}`, {
 				headers: { Accept: 'application/json' },
 				signal: ctrl.signal,
 			})
@@ -431,11 +480,13 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		const cause = (err as NodeJS.ErrnoException & { cause?: unknown }).cause
 		if (cause instanceof Error) {
 			const code = (cause as NodeJS.ErrnoException).code
+			this.log('debug', `Fetch error cause: ${cause.message} (code: ${code ?? 'none'})`)
 			if (code === 'ECONNREFUSED') return 'Connection refused — is Open Live running?'
 			if (code === 'ENOTFOUND') return 'Host not found — check the URL'
 			if (code === 'ECONNRESET') return 'Connection reset'
 			return cause.message
 		}
+		this.log('debug', `Fetch error: ${err.name} — ${err.message}`)
 		if (err.name === 'AbortError') return 'Request timed out'
 		return err.message
 	}

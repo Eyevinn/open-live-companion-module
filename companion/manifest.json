@@ -1,21 +1,27 @@
 {
+  "$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
   "id": "eyevinn-open-live",
-  "name": "Open Live",
-  "shortname": "Open Live",
-  "description": "Control Open Live broadcast production platform — switching, transitions, graphics, FTB, and OVL",
+  "name": "eyevinn-open-live",
+  "shortname": "open-live",
+  "description": "Control Open Live broadcast productions — switch sources, manage preview/program, fade to black, go live, and more.",
   "version": "1.0.0",
   "license": "MIT",
-  "repository": "git+https://github.com/Eyevinn/open-live-companion-module.git",
-  "bugs": "https://github.com/Eyevinn/open-live-companion-module/issues",
-  "maintainers": [],
-  "legacyIds": [],
+  "repository": "git+https://github.com/bitfocus/companion-module-eyevinn-open-live.git",
+  "bugs": "https://github.com/bitfocus/companion-module-eyevinn-open-live/issues",
+  "maintainers": [
+    {
+      "name": "Eyevinn Technology",
+      "email": "info@eyevinn.se"
+    }
+  ],
   "runtime": {
     "type": "node22",
     "api": "nodejs-ipc",
-    "apiVersion": "1.14.1",
+    "apiVersion": "0.0.0",
     "entrypoint": "../dist/main.js"
   },
+  "legacyIds": [],
   "manufacturer": "Eyevinn",
   "products": ["Open Live"],
-  "keywords": ["eyevinn", "open live", "broadcast", "live production", "switching"]
+  "keywords": ["broadcast", "live production", "switcher", "stream deck", "open live"]
 }
