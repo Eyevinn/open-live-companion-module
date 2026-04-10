@@ -12,6 +12,7 @@ import { getPresetDefinitions } from './presets.js'
 
 export interface ModuleConfig {
 	baseUrl: string
+	wsUrl: string
 	productionId: string
 }
 
@@ -57,7 +58,7 @@ export interface ModuleState {
 class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	private wsClient: WsClient | null = null
 	private production: ProductionDoc | null = null
-	private config: ModuleConfig = { baseUrl: 'http://localhost:3000', productionId: '' }
+	private config: ModuleConfig = { baseUrl: 'http://localhost:3000', wsUrl: 'ws://localhost:3000', productionId: '' }
 
 	private state: ModuleState = {
 		pgm: null,
@@ -93,7 +94,15 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 				label: 'API Base URL',
 				default: 'http://localhost:3000',
 				width: 12,
-				tooltip: 'Base URL of the Open Live API, e.g. https://36e888958c.apps.osaas.io or http://localhost:3000',
+				tooltip: 'Base URL of the Open Live REST API — e.g. https://36e888958c.apps.osaas.io or http://localhost:3000',
+			},
+			{
+				type: 'textinput',
+				id: 'wsUrl',
+				label: 'WebSocket URL',
+				default: 'ws://localhost:3000',
+				width: 12,
+				tooltip: 'WebSocket base URL — e.g. wss://36e888958c.apps.osaas.io or ws://localhost:3000',
 			},
 			{
 				type: 'textinput',
@@ -111,10 +120,10 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	// -----------------------------------------------------------------------
 
 	private async _setup(): Promise<void> {
-		const { baseUrl, productionId } = this.config
+		const { baseUrl, wsUrl, productionId } = this.config
 
-		if (!baseUrl || !productionId) {
-			this.updateStatus(InstanceStatus.BadConfig, 'API Base URL and Production ID are required')
+		if (!baseUrl || !wsUrl || !productionId) {
+			this.updateStatus(InstanceStatus.BadConfig, 'API Base URL, WebSocket URL, and Production ID are required')
 			return
 		}
 
@@ -131,9 +140,9 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		// Register definitions (even if production fetch failed, to give empty dropdowns)
 		this._registerDefinitions()
 
-		// Open WebSocket — derive WSS/WS URL from base URL (http→ws, https→wss)
-		const wsUrl = baseUrl.replace(/^http/, 'ws') + `/ws/productions/${encodeURIComponent(productionId)}/controller`
-		this._openWebSocket(wsUrl)
+		// Open WebSocket
+		const fullWsUrl = `${wsUrl}/ws/productions/${encodeURIComponent(productionId)}/controller`
+		this._openWebSocket(fullWsUrl)
 	}
 
 	private _teardown(): void {
