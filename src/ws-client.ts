@@ -6,6 +6,8 @@ export type WsInboundMessage =
 	| { type: 'ON_AIR'; value: boolean }
 	| { type: 'GRAPHIC'; overlayId: string; active: boolean }
 	| { type: 'DSK_STATE'; layer: number; visible: boolean }
+	| { type: 'FTB_STATE'; active: boolean }
+	| { type: 'OVL_STATE'; alpha: number }
 	| { type: 'MACRO_EXECUTED'; macroId: string }
 	| { type: 'MACRO_ERROR'; macroId: string; failedActionIndex: number; error: string }
 	| { type: 'ERROR'; error: string }
@@ -13,6 +15,9 @@ export type WsInboundMessage =
 export type WsOutboundMessage =
 	| { type: 'CUT'; sourceId: string }
 	| { type: 'TRANSITION'; sourceId: string; transitionType: string; durationMs?: number }
+	| { type: 'SET_PVW'; sourceId: string }
+	| { type: 'FTB'; active?: boolean; durationMs: number }
+	| { type: 'SET_OVL'; alpha: number }
 	| { type: 'TAKE' }
 	| { type: 'GO_LIVE' }
 	| { type: 'CUT_STREAM' }

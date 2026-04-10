@@ -101,6 +101,20 @@ export function getFeedbackDefinitions(
 			},
 		},
 
+		ftb_active: {
+			type: 'boolean',
+			name: 'Fade to Black Active',
+			description: 'Active when the production is faded to black',
+			options: [],
+			defaultStyle: {
+				bgcolor: combineRgb(255, 0, 0),
+				color: combineRgb(255, 255, 255),
+			},
+			callback: () => {
+				return getState().ftbActive
+			},
+		},
+
 		dsk_visible: {
 			type: 'boolean',
 			name: 'DSK Visible',
