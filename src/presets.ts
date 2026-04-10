@@ -15,14 +15,88 @@ const C = {
 	navy: combineRgb(0, 0, 100),
 	slate: combineRgb(50, 50, 80),
 	yellow: combineRgb(200, 180, 0),
+	blue: combineRgb(0, 80, 180),
+	darkBlue: combineRgb(0, 40, 100),
 }
 
-export function getPresetDefinitions(production: ProductionDoc | null): CompanionPresetDefinitions {
+// -----------------------------------------------------------------------
+// Landing mode — show all active productions as buttons
+// -----------------------------------------------------------------------
+export function getLandingPresets(productions: ProductionDoc[]): CompanionPresetDefinitions {
+	const presets: CompanionPresetDefinitions = {}
+
+	if (productions.length === 0) {
+		presets['no_productions'] = {
+			type: 'button',
+			category: 'Productions',
+			name: 'No Active Productions',
+			style: {
+				text: 'NO ACTIVE\nPRODUCTIONS',
+				size: '14',
+				color: C.white,
+				bgcolor: C.dark,
+			},
+			feedbacks: [],
+			steps: [{ down: [], up: [] }],
+		}
+		return presets
+	}
+
+	for (const prod of productions) {
+		presets[`production_${prod._id}`] = {
+			type: 'button',
+			category: 'Productions',
+			name: prod.name,
+			style: {
+				text: prod.name,
+				size: 'auto',
+				color: C.white,
+				bgcolor: C.blue,
+			},
+			feedbacks: [],
+			steps: [
+				{
+					down: [{ actionId: 'select_production', options: { productionId: prod._id } }],
+					up: [],
+				},
+			],
+		}
+	}
+
+	return presets
+}
+
+// -----------------------------------------------------------------------
+// Control mode — full switcher preset set for a selected production
+// -----------------------------------------------------------------------
+export function getControlPresets(production: ProductionDoc | null): CompanionPresetDefinitions {
 	const presets: CompanionPresetDefinitions = {}
 
 	const sources = production?.sources ?? []
 	const graphics = production?.graphics ?? []
 	const macros = production?.macros ?? []
+
+	// -------------------------------------------------------------------------
+	// Category: Navigation
+	// -------------------------------------------------------------------------
+	presets['back_to_productions'] = {
+		type: 'button',
+		category: 'Navigation',
+		name: 'Back to Productions',
+		style: {
+			text: '← BACK',
+			size: '18',
+			color: C.white,
+			bgcolor: C.darkBlue,
+		},
+		feedbacks: [],
+		steps: [
+			{
+				down: [{ actionId: 'back_to_productions', options: {} }],
+				up: [],
+			},
+		],
+	}
 
 	// -------------------------------------------------------------------------
 	// Category: Program (PGM) — immediate cut to source

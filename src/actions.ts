@@ -2,11 +2,16 @@ import type { CompanionActionDefinitions } from '@companion-module/base'
 import type { WsClient } from './ws-client.js'
 import type { ProductionDoc, ModuleState } from './main.js'
 
+export interface ActionCallbacks {
+	selectProduction: (id: string) => void
+	backToProductions: () => void
+}
+
 export function getActionDefinitions(
-	wsClient: WsClient | null,
 	getWsClient: () => WsClient | null,
 	production: ProductionDoc | null,
 	getState: () => ModuleState,
+	callbacks: ActionCallbacks,
 ): CompanionActionDefinitions {
 	const sources = production?.sources ?? []
 	const graphics = production?.graphics ?? []
@@ -15,8 +20,6 @@ export function getActionDefinitions(
 	const sourceChoices = sources.map((s) => ({ id: s.id, label: s.name }))
 	const graphicChoices = graphics.map((g) => ({ id: g.id, label: g.name }))
 	const macroChoices = macros.map((m) => ({ id: m.id, label: m.label }))
-
-	void wsClient // used indirectly via getWsClient
 
 	function send(msg: Parameters<WsClient['send']>[0]): void {
 		const client = getWsClient()
@@ -38,6 +41,36 @@ export function getActionDefinitions(
 	]
 
 	return {
+		// -----------------------------------------------------------------------
+		// Navigation
+		// -----------------------------------------------------------------------
+		select_production: {
+			name: 'Select Production',
+			options: [
+				{
+					id: 'productionId',
+					type: 'textinput',
+					label: 'Production ID',
+					default: '',
+				},
+			],
+			callback: (action) => {
+				const id = String(action.options['productionId'] ?? '')
+				if (id) callbacks.selectProduction(id)
+			},
+		},
+
+		back_to_productions: {
+			name: 'Back to Production List',
+			options: [],
+			callback: () => {
+				callbacks.backToProductions()
+			},
+		},
+
+		// -----------------------------------------------------------------------
+		// Switching
+		// -----------------------------------------------------------------------
 		cut: {
 			name: 'Cut to Source',
 			options: [
@@ -151,6 +184,9 @@ export function getActionDefinitions(
 			},
 		},
 
+		// -----------------------------------------------------------------------
+		// Fade to Black
+		// -----------------------------------------------------------------------
 		ftb: {
 			name: 'Fade to Black',
 			options: [
@@ -183,6 +219,9 @@ export function getActionDefinitions(
 			},
 		},
 
+		// -----------------------------------------------------------------------
+		// OVL Alpha
+		// -----------------------------------------------------------------------
 		set_ovl_alpha: {
 			name: 'Set Overlay Alpha',
 			options: [
@@ -200,6 +239,9 @@ export function getActionDefinitions(
 			},
 		},
 
+		// -----------------------------------------------------------------------
+		// Stream Control
+		// -----------------------------------------------------------------------
 		go_live: {
 			name: 'Go Live',
 			options: [],
@@ -216,6 +258,9 @@ export function getActionDefinitions(
 			},
 		},
 
+		// -----------------------------------------------------------------------
+		// Graphics
+		// -----------------------------------------------------------------------
 		graphic_on: {
 			name: 'Graphic On',
 			options: [
@@ -250,6 +295,9 @@ export function getActionDefinitions(
 			},
 		},
 
+		// -----------------------------------------------------------------------
+		// DSK
+		// -----------------------------------------------------------------------
 		dsk_toggle: {
 			name: 'DSK Toggle',
 			options: [
@@ -285,6 +333,9 @@ export function getActionDefinitions(
 			},
 		},
 
+		// -----------------------------------------------------------------------
+		// Macros
+		// -----------------------------------------------------------------------
 		macro_exec: {
 			name: 'Execute Macro',
 			options: [
