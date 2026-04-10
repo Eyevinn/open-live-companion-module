@@ -1,64 +1,66 @@
 import { combineRgb } from '@companion-module/base'
 import type { CompanionFeedbackDefinitions } from '@companion-module/base'
-import type { ModuleState } from './main.js'
-import type { ProductionDoc } from './main.js'
+import type { ModuleState, ProductionDoc } from './main.js'
+
+/**
+ * Source index options shared between pgm_tally and pvw_tally.
+ * Index is 1-based (Source 1 = production.sources[0]).
+ */
+const sourceIndexOption = {
+	id: 'sourceIndex',
+	type: 'number' as const,
+	label: 'Source Slot (1–8)',
+	default: 1,
+	min: 1,
+	max: 8,
+}
 
 export function getFeedbackDefinitions(
 	getState: () => ModuleState,
 	production: ProductionDoc | null,
+	log?: (level: 'debug' | 'info' | 'warn' | 'error', msg: string) => void,
 ): CompanionFeedbackDefinitions {
-	const sources = production?.sources ?? []
 	const graphics = production?.graphics ?? []
-
-	const sourceChoices = sources.map((s) => ({ id: s.id, label: s.name }))
 	const graphicChoices = graphics.map((g) => ({ id: g.id, label: g.name }))
 
 	return {
 		pgm_tally: {
 			type: 'boolean',
 			name: 'PGM Tally',
-			description: 'Active when the selected source is on PGM',
-			options: [
-				{
-					id: 'sourceId',
-					type: 'dropdown',
-					label: 'Source',
-					choices: sourceChoices.length > 0 ? sourceChoices : [{ id: '', label: '(no sources)' }],
-					default: sourceChoices[0]?.id ?? '',
-					allowCustom: true,
-				},
-			],
+			description: 'Active when Source Slot N is on PGM',
+			options: [sourceIndexOption],
 			defaultStyle: {
 				bgcolor: combineRgb(255, 0, 0),
 				color: combineRgb(255, 255, 255),
 			},
 			callback: (feedback) => {
 				const state = getState()
-				return state.pgm !== null && state.pgm === String(feedback.options['sourceId'] ?? '')
+				const idx = Number(feedback.options['sourceIndex'] ?? 1)
+				const source = production?.sources[idx - 1]
+				if (!source) return false
+				const result = state.pgm !== null && state.pgm === source.id
+				log?.('debug', `pgm_tally[${idx}]: pgm=${state.pgm ?? 'null'}, sourceId=${source.id}, result=${result}`)
+				return result
 			},
 		},
 
 		pvw_tally: {
 			type: 'boolean',
 			name: 'PVW Tally',
-			description: 'Active when the selected source is on PVW',
-			options: [
-				{
-					id: 'sourceId',
-					type: 'dropdown',
-					label: 'Source',
-					choices: sourceChoices.length > 0 ? sourceChoices : [{ id: '', label: '(no sources)' }],
-					default: sourceChoices[0]?.id ?? '',
-					allowCustom: true,
-				},
-			],
+			description: 'Active when Source Slot N is on PVW',
+			options: [sourceIndexOption],
 			defaultStyle: {
 				bgcolor: combineRgb(0, 200, 0),
 				color: combineRgb(255, 255, 255),
 			},
 			callback: (feedback) => {
 				const state = getState()
-				return state.pvw !== null && state.pvw === String(feedback.options['sourceId'] ?? '')
+				const idx = Number(feedback.options['sourceIndex'] ?? 1)
+				const source = production?.sources[idx - 1]
+				if (!source) return false
+				const result = state.pvw !== null && state.pvw === source.id
+				log?.('debug', `pvw_tally[${idx}]: pvw=${state.pvw ?? 'null'}, sourceId=${source.id}, result=${result}`)
+				return result
 			},
 		},
 
@@ -71,9 +73,19 @@ export function getFeedbackDefinitions(
 				bgcolor: combineRgb(255, 0, 0),
 				color: combineRgb(255, 255, 255),
 			},
-			callback: () => {
-				return getState().onAir
+			callback: () => getState().onAir,
+		},
+
+		ftb_active: {
+			type: 'boolean',
+			name: 'Fade to Black Active',
+			description: 'Active when the production is faded to black',
+			options: [],
+			defaultStyle: {
+				bgcolor: combineRgb(255, 0, 0),
+				color: combineRgb(255, 255, 255),
 			},
+			callback: () => getState().ftbActive,
 		},
 
 		graphic_active: {
@@ -95,23 +107,8 @@ export function getFeedbackDefinitions(
 				color: combineRgb(0, 0, 0),
 			},
 			callback: (feedback) => {
-				const state = getState()
 				const overlayId = String(feedback.options['overlayId'] ?? '')
-				return state.graphics[overlayId] === true
-			},
-		},
-
-		ftb_active: {
-			type: 'boolean',
-			name: 'Fade to Black Active',
-			description: 'Active when the production is faded to black',
-			options: [],
-			defaultStyle: {
-				bgcolor: combineRgb(255, 0, 0),
-				color: combineRgb(255, 255, 255),
-			},
-			callback: () => {
-				return getState().ftbActive
+				return getState().graphics[overlayId] === true
 			},
 		},
 
@@ -134,9 +131,8 @@ export function getFeedbackDefinitions(
 				color: combineRgb(0, 0, 0),
 			},
 			callback: (feedback) => {
-				const state = getState()
 				const layer = Number(feedback.options['layer'] ?? 1)
-				return state.dskLayers[layer] === true
+				return getState().dskLayers[layer] === true
 			},
 		},
 	}

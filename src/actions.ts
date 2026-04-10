@@ -7,25 +7,39 @@ export interface ActionCallbacks {
 	backToProductions: () => void
 }
 
+/**
+ * Shared option for slot-based source selection (1-based index).
+ * Source 1 = production.sources[0], Source 2 = production.sources[1], etc.
+ */
+const sourceIndexOption = {
+	id: 'sourceIndex',
+	type: 'number' as const,
+	label: 'Source Slot (1–8)',
+	default: 1,
+	min: 1,
+	max: 8,
+}
+
 export function getActionDefinitions(
 	getWsClient: () => WsClient | null,
 	production: ProductionDoc | null,
 	getState: () => ModuleState,
 	callbacks: ActionCallbacks,
 ): CompanionActionDefinitions {
-	const sources = production?.sources ?? []
 	const graphics = production?.graphics ?? []
 	const macros = production?.macros ?? []
 
-	const sourceChoices = sources.map((s) => ({ id: s.id, label: s.name }))
 	const graphicChoices = graphics.map((g) => ({ id: g.id, label: g.name }))
 	const macroChoices = macros.map((m) => ({ id: m.id, label: m.label }))
 
 	function send(msg: Parameters<WsClient['send']>[0]): void {
 		const client = getWsClient()
-		if (client) {
-			client.send(msg)
-		}
+		if (client) client.send(msg)
+	}
+
+	/** Resolve a 1-based sourceIndex to the production source's ID. Returns null if out of range. */
+	function resolveSourceId(sourceIndex: number): string | null {
+		return production?.sources[sourceIndex - 1]?.id ?? null
 	}
 
 	const transitionTypeChoices = [
@@ -72,50 +86,33 @@ export function getActionDefinitions(
 		// Switching
 		// -----------------------------------------------------------------------
 		cut: {
-			name: 'Cut to Source',
-			options: [
-				{
-					id: 'sourceId',
-					type: 'dropdown',
-					label: 'Source',
-					choices: sourceChoices.length > 0 ? sourceChoices : [{ id: '', label: '(no sources)' }],
-					default: sourceChoices[0]?.id ?? '',
-					allowCustom: true,
-				},
-			],
+			name: 'Cut to Source Slot',
+			options: [sourceIndexOption],
 			callback: (action) => {
-				send({ type: 'CUT', sourceId: String(action.options['sourceId'] ?? '') })
+				const idx = Number(action.options['sourceIndex'] ?? 1)
+				const sourceId = resolveSourceId(idx)
+				if (!sourceId) return
+				send({ type: 'CUT', sourceId })
 			},
 		},
 
 		set_pvw: {
-			name: 'Load Source to Preview',
-			options: [
-				{
-					id: 'sourceId',
-					type: 'dropdown',
-					label: 'Source',
-					choices: sourceChoices.length > 0 ? sourceChoices : [{ id: '', label: '(no sources)' }],
-					default: sourceChoices[0]?.id ?? '',
-					allowCustom: true,
-				},
-			],
+			name: 'Load Source Slot to Preview',
+			options: [sourceIndexOption],
 			callback: (action) => {
-				send({ type: 'SET_PVW', sourceId: String(action.options['sourceId'] ?? '') })
+				const idx = Number(action.options['sourceIndex'] ?? 1)
+				const sourceId = resolveSourceId(idx)
+				if (!sourceId) return
+				// No-op if the source is already live on PGM — can't preview what's on air
+				if (getState().pgm === sourceId) return
+				send({ type: 'SET_PVW', sourceId })
 			},
 		},
 
 		transition: {
-			name: 'Transition to Source',
+			name: 'Transition to Source Slot',
 			options: [
-				{
-					id: 'sourceId',
-					type: 'dropdown',
-					label: 'Source',
-					choices: sourceChoices.length > 0 ? sourceChoices : [{ id: '', label: '(no sources)' }],
-					default: sourceChoices[0]?.id ?? '',
-					allowCustom: true,
-				},
+				sourceIndexOption,
 				{
 					id: 'transitionType',
 					type: 'dropdown',
@@ -133,9 +130,12 @@ export function getActionDefinitions(
 				},
 			],
 			callback: (action) => {
+				const idx = Number(action.options['sourceIndex'] ?? 1)
+				const sourceId = resolveSourceId(idx)
+				if (!sourceId) return
 				send({
 					type: 'TRANSITION',
-					sourceId: String(action.options['sourceId'] ?? ''),
+					sourceId,
 					transitionType: String(action.options['transitionType'] ?? 'mix'),
 					durationMs: Number(action.options['durationMs'] ?? 1000),
 				})
@@ -163,24 +163,29 @@ export function getActionDefinitions(
 			],
 			callback: (action) => {
 				const pvw = getState().pvw
-				if (!pvw) {
-					// Nothing on PVW — no-op
-					return
-				}
+				if (!pvw) return // Nothing on PVW — no-op
 				send({
 					type: 'TRANSITION',
 					sourceId: pvw,
 					transitionType: String(action.options['transitionType'] ?? 'mix'),
 					durationMs: Number(action.options['durationMs'] ?? 1000),
 				})
+				// Transitioning out of FTB — deactivate it so the button goes dark
+				if (getState().ftbActive) {
+					send({ type: 'FTB', active: false, durationMs: 0 })
+				}
 			},
 		},
 
 		take: {
-			name: 'Take (PVW to PGM)',
+			name: 'Take (Cut PVW to PGM)',
 			options: [],
 			callback: () => {
 				send({ type: 'TAKE' })
+				// Taking a cut out of FTB — deactivate it so the button goes dark
+				if (getState().ftbActive) {
+					send({ type: 'FTB', active: false, durationMs: 0 })
+				}
 			},
 		},
 
