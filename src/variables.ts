@@ -3,6 +3,14 @@ import type { CompanionVariableDefinition } from '@companion-module/base'
 export function getVariableDefinitions(): CompanionVariableDefinition[] {
 	return [
 		{
+			variableId: 'selected_production_name',
+			name: 'Name of selected production',
+		},
+		{
+			variableId: 'production_name',
+			name: 'Name of connected production',
+		},
+		{
 			variableId: 'pgm_source',
 			name: 'Current PGM source ID',
 		},
@@ -13,10 +21,6 @@ export function getVariableDefinitions(): CompanionVariableDefinition[] {
 		{
 			variableId: 'on_air',
 			name: 'On Air status (true/false)',
-		},
-		{
-			variableId: 'production_name',
-			name: 'Name of connected production',
 		},
 		{
 			variableId: 'ftb_active',
