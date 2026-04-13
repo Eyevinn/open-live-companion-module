@@ -18,6 +18,7 @@ export interface ProductionSource {
 	id: string
 	name: string
 	type: string
+	mixerInput: string
 }
 
 export interface ProductionGraphic {
@@ -182,17 +183,19 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		try {
 			const allSources = await this._fetchSources(apiUrl)
 			const sourceMap = new Map(allSources.map((s) => [s.id, s.name]))
-			production.sources = (production.sources as unknown as Array<{ sourceId: string }>).map((slot) => ({
+			production.sources = (production.sources as unknown as Array<{ sourceId: string; mixerInput: string }>).map((slot) => ({
 				id: slot.sourceId,
 				name: sourceMap.get(slot.sourceId) ?? slot.sourceId,
 				type: 'srt',
+				mixerInput: slot.mixerInput,
 			}))
 		} catch {
 			// Fallback: use sourceId as name
-			production.sources = (production.sources as unknown as Array<{ sourceId: string }>).map((slot) => ({
+			production.sources = (production.sources as unknown as Array<{ sourceId: string; mixerInput: string }>).map((slot) => ({
 				id: slot.sourceId,
 				name: slot.sourceId,
 				type: 'srt',
+				mixerInput: slot.mixerInput,
 			}))
 		}
 

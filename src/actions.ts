@@ -38,9 +38,9 @@ export function getActionDefinitions(
 		if (client) client.send(msg)
 	}
 
-	/** Resolve a 1-based sourceIndex to the production source's ID. Returns null if out of range. */
-	function resolveSourceId(sourceIndex: number): string | null {
-		return production?.sources[sourceIndex - 1]?.id ?? null
+	/** Resolve a 1-based sourceIndex to the production source's mixerInput. Returns null if out of range. */
+	function resolveMixerInput(sourceIndex: number): string | null {
+		return production?.sources[sourceIndex - 1]?.mixerInput ?? null
 	}
 
 	const transitionTypeChoices = [
@@ -118,9 +118,9 @@ export function getActionDefinitions(
 			options: [sourceIndexOption],
 			callback: (action) => {
 				const idx = Number(action.options['sourceIndex'] ?? 1)
-				const sourceId = resolveSourceId(idx)
-				if (!sourceId) return
-				send({ type: 'CUT', sourceId })
+				const mixerInput = resolveMixerInput(idx)
+				if (!mixerInput) return
+				send({ type: 'CUT', mixerInput })
 			},
 		},
 
@@ -129,11 +129,11 @@ export function getActionDefinitions(
 			options: [sourceIndexOption],
 			callback: (action) => {
 				const idx = Number(action.options['sourceIndex'] ?? 1)
-				const sourceId = resolveSourceId(idx)
-				if (!sourceId) return
+				const mixerInput = resolveMixerInput(idx)
+				if (!mixerInput) return
 				// No-op if the source is already live on PGM — can't preview what's on air
-				if (getState().pgm === sourceId) return
-				send({ type: 'SET_PVW', sourceId })
+				if (getState().pgm === mixerInput) return
+				send({ type: 'SET_PVW', mixerInput })
 			},
 		},
 
@@ -159,11 +159,11 @@ export function getActionDefinitions(
 			],
 			callback: (action) => {
 				const idx = Number(action.options['sourceIndex'] ?? 1)
-				const sourceId = resolveSourceId(idx)
-				if (!sourceId) return
+				const mixerInput = resolveMixerInput(idx)
+				if (!mixerInput) return
 				send({
 					type: 'TRANSITION',
-					sourceId,
+					mixerInput,
 					transitionType: String(action.options['transitionType'] ?? 'mix'),
 					durationMs: Number(action.options['durationMs'] ?? 1000),
 				})
@@ -194,7 +194,7 @@ export function getActionDefinitions(
 				if (!pvw) return // Nothing on PVW — no-op
 				send({
 					type: 'TRANSITION',
-					sourceId: pvw,
+					mixerInput: pvw,
 					transitionType: String(action.options['transitionType'] ?? 'mix'),
 					durationMs: Number(action.options['durationMs'] ?? 1000),
 				})

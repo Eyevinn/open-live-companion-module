@@ -38,8 +38,8 @@ export function getFeedbackDefinitions(
 				const idx = Number(feedback.options['sourceIndex'] ?? 1)
 				const source = production?.sources[idx - 1]
 				if (!source) return false
-				const result = state.pgm !== null && state.pgm === source.id
-				log?.('debug', `pgm_tally[${idx}]: pgm=${state.pgm ?? 'null'}, sourceId=${source.id}, result=${result}`)
+				const result = state.pgm !== null && state.pgm === source.mixerInput
+				log?.('debug', `pgm_tally[${idx}]: pgm=${state.pgm ?? 'null'}, mixerInput=${source.mixerInput}, result=${result}`)
 				return result
 			},
 		},
@@ -58,8 +58,8 @@ export function getFeedbackDefinitions(
 				const idx = Number(feedback.options['sourceIndex'] ?? 1)
 				const source = production?.sources[idx - 1]
 				if (!source) return false
-				const result = state.pvw !== null && state.pvw === source.id
-				log?.('debug', `pvw_tally[${idx}]: pvw=${state.pvw ?? 'null'}, sourceId=${source.id}, result=${result}`)
+				const result = state.pvw !== null && state.pvw === source.mixerInput
+				log?.('debug', `pvw_tally[${idx}]: pvw=${state.pvw ?? 'null'}, mixerInput=${source.mixerInput}, result=${result}`)
 				return result
 			},
 		},

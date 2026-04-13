@@ -13,9 +13,9 @@ export type WsInboundMessage =
 	| { type: 'ERROR'; error: string }
 
 export type WsOutboundMessage =
-	| { type: 'CUT'; sourceId: string }
-	| { type: 'TRANSITION'; sourceId: string; transitionType: string; durationMs?: number }
-	| { type: 'SET_PVW'; sourceId: string }
+	| { type: 'CUT'; mixerInput: string }
+	| { type: 'TRANSITION'; mixerInput: string; transitionType: string; durationMs?: number }
+	| { type: 'SET_PVW'; mixerInput: string }
 	| { type: 'FTB'; active?: boolean; durationMs: number }
 	| { type: 'SET_OVL'; alpha: number }
 	| { type: 'TAKE' }
