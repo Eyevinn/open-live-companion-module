@@ -42,8 +42,7 @@ export function getLandingPresets(_productions: ProductionDoc[]): CompanionPrese
 			category: 'Productions',
 			name: `Production Slot ${slot}`,
 			style: {
-				text: `$(self:prod_${slot}_name)`,
-				textExpression: true,
+				text: `$(OpenLive:prod_${slot}_name)`,
 				size: 'auto',
 				color: C.white,
 				bgcolor: C.dark,
@@ -91,8 +90,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			category: 'Program (PGM)',
 			name: `PGM Indicator — Source ${i}`,
 			style: {
-				text: `$(self:source_${i}_name)`,
-				textExpression: true,
+				text: `$(OpenLive:source_${i}_name)`,
 				size: 'auto',
 				color: C.grey,
 				bgcolor: C.dark,
@@ -117,8 +115,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			category: 'Preview (PVW)',
 			name: `PVW Selector — Source ${i}`,
 			style: {
-				text: `$(self:source_${i}_name)`,
-				textExpression: true,
+				text: `$(OpenLive:source_${i}_name)`,
 				size: 'auto',
 				color: C.white,
 				bgcolor: C.dark,
