@@ -36,7 +36,7 @@ export function getLandingPresets(_productions: ProductionDoc[]): CompanionPrese
 
 	// Slot-based production buttons: text and state driven by variables and feedback.
 	// These are the same buttons as in the default config — add them to any page from the presets panel.
-	for (let slot = 1; slot <= 8; slot++) {
+	for (let slot = 1; slot <= 31; slot++) {
 		presets[`production_slot_${slot}`] = {
 			type: 'button',
 			category: 'Productions',

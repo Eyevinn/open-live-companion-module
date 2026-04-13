@@ -81,10 +81,10 @@ export function getActionDefinitions(
 				{
 					id: 'slot',
 					type: 'number',
-					label: 'Production Slot (1–8)',
+					label: 'Production Slot (1–31)',
 					default: 1,
 					min: 1,
-					max: 8,
+					max: 31,
 				},
 			],
 			callback: (action) => {
