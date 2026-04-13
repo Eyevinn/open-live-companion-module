@@ -5,6 +5,7 @@ import type { ProductionDoc, ModuleState } from './main.js'
 export interface ActionCallbacks {
 	selectProduction: (id: string) => void
 	backToProductions: () => void
+	refreshProductions: () => void
 }
 
 /**
@@ -74,11 +75,38 @@ export function getActionDefinitions(
 			},
 		},
 
+		select_production_slot: {
+			name: 'Select Production by Slot',
+			options: [
+				{
+					id: 'slot',
+					type: 'number',
+					label: 'Production Slot (1–8)',
+					default: 1,
+					min: 1,
+					max: 8,
+				},
+			],
+			callback: (action) => {
+				const slot = Number(action.options['slot'] ?? 1)
+				const prod = getState().productions[slot - 1]
+				if (prod?._id) callbacks.selectProduction(prod._id)
+			},
+		},
+
 		back_to_productions: {
 			name: 'Back to Production List',
 			options: [],
 			callback: () => {
 				callbacks.backToProductions()
+			},
+		},
+
+		refresh_productions: {
+			name: 'Refresh Production List',
+			options: [],
+			callback: () => {
+				callbacks.refreshProductions()
 			},
 		},
 

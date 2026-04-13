@@ -5,7 +5,7 @@ import {
 	type SomeCompanionConfigField,
 } from '@companion-module/base'
 import { WsClient } from './ws-client.js'
-import { getVariableDefinitions, emptySourceVars, sourceVarsFromList } from './variables.js'
+import { getVariableDefinitions, emptySourceVars, sourceVarsFromList, emptyProductionSlotVars, productionSlotVarsFromList } from './variables.js'
 import { getActionDefinitions, type ActionCallbacks } from './actions.js'
 import { getFeedbackDefinitions } from './feedbacks.js'
 import { getLandingPresets, getControlPresets } from './presets.js'
@@ -191,6 +191,17 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		this._startPolling()
 	}
 
+	public async refreshProductions(): Promise<void> {
+		try {
+			const all = await this._fetchProductions(this.config.apiUrl)
+			this.state.productions = all.filter((p) => p.status === 'active')
+			this.log('info', `Refreshed — ${this.state.productions.length} active production(s)`)
+		} catch (err) {
+			this.log('warn', `Failed to refresh productions: ${this._extractErrorMessage(err)}`)
+		}
+		this._registerLandingMode()
+	}
+
 	public async backToProductions(): Promise<void> {
 		this._teardownWs()
 		this._stopPolling()
@@ -219,6 +230,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		return {
 			selectProduction: (id) => void this.selectProduction(id),
 			backToProductions: () => void this.backToProductions(),
+			refreshProductions: () => void this.refreshProductions(),
 		}
 	}
 
@@ -238,7 +250,9 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			ftb_active: 'false',
 			ovl_alpha: '1',
 			...emptySourceVars(),
+			...productionSlotVarsFromList(this.state.productions),
 		})
+		this.checkFeedbacks('production_slot_occupied')
 	}
 
 	private _registerControlMode(): void {

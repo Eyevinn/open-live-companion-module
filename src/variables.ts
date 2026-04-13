@@ -17,6 +17,11 @@ export function getVariableDefinitions(): CompanionVariableDefinition[] {
 		defs.push({ variableId: `source_${i}_name`, name: `Source ${i} name` })
 	}
 
+	// prod_N_name (1–8) — name of the Nth active production in the landing list
+	for (let i = 1; i <= 8; i++) {
+		defs.push({ variableId: `prod_${i}_name`, name: `Production slot ${i} name` })
+	}
+
 	return defs
 }
 
@@ -32,6 +37,22 @@ export function sourceVarsFromList(sources: Array<{ name: string }>): Record<str
 	const v: Record<string, string> = { source_count: String(sources.length) }
 	for (let i = 1; i <= 8; i++) {
 		v[`source_${i}_name`] = sources[i - 1]?.name ?? ''
+	}
+	return v
+}
+
+/** Clears all production slot name variables. */
+export function emptyProductionSlotVars(): Record<string, string> {
+	const v: Record<string, string> = {}
+	for (let i = 1; i <= 8; i++) v[`prod_${i}_name`] = ''
+	return v
+}
+
+/** Populates production slot name variables from the active productions list. */
+export function productionSlotVarsFromList(productions: Array<{ name: string }>): Record<string, string> {
+	const v: Record<string, string> = {}
+	for (let i = 1; i <= 8; i++) {
+		v[`prod_${i}_name`] = productions[i - 1]?.name ?? ''
 	}
 	return v
 }

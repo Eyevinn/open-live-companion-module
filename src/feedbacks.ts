@@ -112,6 +112,30 @@ export function getFeedbackDefinitions(
 			},
 		},
 
+		production_slot_occupied: {
+			type: 'boolean',
+			name: 'Production Slot Occupied',
+			description: 'Active when the given production slot has an active production',
+			options: [
+				{
+					id: 'slot',
+					type: 'number',
+					label: 'Slot (1–8)',
+					default: 1,
+					min: 1,
+					max: 8,
+				},
+			],
+			defaultStyle: {
+				bgcolor: combineRgb(0, 150, 0),
+				color: combineRgb(255, 255, 255),
+			},
+			callback: (feedback) => {
+				const slot = Number(feedback.options['slot'] ?? 1)
+				return getState().productions[slot - 1] != null
+			},
+		},
+
 		dsk_visible: {
 			type: 'boolean',
 			name: 'DSK Visible',

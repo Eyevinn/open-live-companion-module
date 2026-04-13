@@ -22,30 +22,42 @@ const C = {
 // -----------------------------------------------------------------------
 // Landing mode — active productions as buttons
 // -----------------------------------------------------------------------
-export function getLandingPresets(productions: ProductionDoc[]): CompanionPresetDefinitions {
+export function getLandingPresets(_productions: ProductionDoc[]): CompanionPresetDefinitions {
 	const presets: CompanionPresetDefinitions = {}
 
-	if (productions.length === 0) {
-		presets['no_productions'] = {
-			type: 'button',
-			category: 'Productions',
-			name: 'No Active Productions',
-			style: { text: 'NO ACTIVE\nPRODUCTIONS', size: '14', color: C.white, bgcolor: C.dark },
-			feedbacks: [],
-			steps: [{ down: [], up: [] }],
-		}
-		return presets
+	presets['refresh_productions'] = {
+		type: 'button',
+		category: 'Productions',
+		name: 'Refresh Productions',
+		style: { text: 'REFRESH', size: '14', color: C.white, bgcolor: C.darkBlue },
+		feedbacks: [],
+		steps: [{ down: [{ actionId: 'refresh_productions', options: {} }], up: [] }],
 	}
 
-	for (const prod of productions) {
-		presets[`production_${prod._id}`] = {
+	// Slot-based production buttons: text and state driven by variables and feedback.
+	// These are the same buttons as in the default config — add them to any page from the presets panel.
+	for (let slot = 1; slot <= 8; slot++) {
+		presets[`production_slot_${slot}`] = {
 			type: 'button',
 			category: 'Productions',
-			name: prod.name,
-			style: { text: prod.name, size: 'auto', color: C.white, bgcolor: C.blue },
-			feedbacks: [],
+			name: `Production Slot ${slot}`,
+			style: {
+				text: `$(self:prod_${slot}_name)`,
+				textExpression: true,
+				size: 'auto',
+				color: C.white,
+				bgcolor: C.dark,
+				alignment: 'center:center',
+			},
+			feedbacks: [
+				{
+					feedbackId: 'production_slot_occupied',
+					options: { slot },
+					style: { bgcolor: C.green, color: C.white },
+				},
+			],
 			steps: [
-				{ down: [{ actionId: 'select_production', options: { productionId: prod._id } }], up: [] },
+				{ down: [{ actionId: 'select_production_slot', options: { slot } }], up: [] },
 			],
 		}
 	}
@@ -79,7 +91,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			category: 'Program (PGM)',
 			name: `PGM Indicator — Source ${i}`,
 			style: {
-				text: `$(openlive:source_${i}_name)`,
+				text: `$(self:source_${i}_name)`,
 				textExpression: true,
 				size: 'auto',
 				color: C.grey,
@@ -105,7 +117,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			category: 'Preview (PVW)',
 			name: `PVW Selector — Source ${i}`,
 			style: {
-				text: `$(openlive:source_${i}_name)`,
+				text: `$(self:source_${i}_name)`,
 				textExpression: true,
 				size: 'auto',
 				color: C.white,
