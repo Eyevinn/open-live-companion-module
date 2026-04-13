@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
   "id": "eyevinn-open-live",
   "name": "Open Live",
-  "shortname": "Open Live",
+  "shortname": "OpenLive",
   "description": "Control Open Live broadcast productions — switch sources, manage preview/program, fade to black, go live, and more.",
   "version": "1.0.0",
   "license": "MIT",

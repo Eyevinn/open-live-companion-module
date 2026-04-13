@@ -35,18 +35,18 @@ Once a production is selected the module connects to its WebSocket and exposes t
 
 | Variable | Description |
 |---|---|
-The variable prefix is the connection label you set in Companion (default: `Open Live`). Replace spaces with underscores when Companion auto-generates the label, e.g. `$(Open_Live:production_name)`. The examples below use the default label.
+The variable prefix matches the connection label (default: `OpenLive`).
 
 | Variable | Description |
 |---|---|
-| `$(Open_Live:production_name)` | Name of the connected production |
-| `$(Open_Live:pgm_source)` | Current PGM source ID |
-| `$(Open_Live:pvw_source)` | Current PVW source ID |
-| `$(Open_Live:on_air)` | `true` when the stream is live |
-| `$(Open_Live:ftb_active)` | `true` when faded to black |
-| `$(Open_Live:ovl_alpha)` | Current overlay alpha (0.0–1.0) |
-| `$(Open_Live:source_1_name)` … `$(Open_Live:source_8_name)` | Name of each source slot |
-| `$(Open_Live:source_count)` | Number of sources in the current production |
+| `$(OpenLive:production_name)` | Name of the connected production |
+| `$(OpenLive:pgm_source)` | Current PGM source ID |
+| `$(OpenLive:pvw_source)` | Current PVW source ID |
+| `$(OpenLive:on_air)` | `true` when the stream is live |
+| `$(OpenLive:ftb_active)` | `true` when faded to black |
+| `$(OpenLive:ovl_alpha)` | Current overlay alpha (0.0–1.0) |
+| `$(OpenLive:source_1_name)` … `$(OpenLive:source_8_name)` | Name of each source slot |
+| `$(OpenLive:source_count)` | Number of sources in the current production |
 
 ## Default Page Layout
 
