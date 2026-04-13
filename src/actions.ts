@@ -62,6 +62,7 @@ export function getActionDefinitions(
 		// -----------------------------------------------------------------------
 		select_production: {
 			name: 'Select Production',
+			description: 'Connect to a specific Open Live production by its internal ID. Use "Select Production by Slot" for button-driven workflows.',
 			options: [
 				{
 					id: 'productionId',
@@ -78,6 +79,7 @@ export function getActionDefinitions(
 
 		select_production_slot: {
 			name: 'Select Production by Slot',
+			description: 'Connect to the production in slot 1–31 of the landing list. Empty slots do nothing. Used by the default Page 1 buttons.',
 			options: [
 				{
 					id: 'slot',
@@ -102,6 +104,7 @@ export function getActionDefinitions(
 
 		back_to_productions: {
 			name: 'Back to Production List',
+			description: 'Disconnect from the current production and return to landing mode so a different production can be selected.',
 			options: [],
 			callback: () => {
 				callbacks.backToProductions()
@@ -110,6 +113,7 @@ export function getActionDefinitions(
 
 		refresh_productions: {
 			name: 'Refresh Production List',
+			description: 'Re-fetch active productions from Open Live and update the landing page slot variables. Assign to the REFRESH button on Page 1.',
 			options: [],
 			callback: () => {
 				callbacks.refreshProductions()
@@ -121,6 +125,7 @@ export function getActionDefinitions(
 		// -----------------------------------------------------------------------
 		cut: {
 			name: 'Cut to Source Slot',
+			description: 'Hard-cut source slot N directly to program output, bypassing preview. Use on the CUT bus (Row 2) of the M/E page.',
 			options: [sourceIndexOption],
 			callback: (action) => {
 				const idx = Number(action.options['sourceIndex'] ?? 1)
@@ -132,6 +137,7 @@ export function getActionDefinitions(
 
 		set_pvw: {
 			name: 'Load Source Slot to Preview',
+			description: 'Stage source slot N on the preview output. No-op if that source is already live on PGM. Use on the PVW bus (Row 1) of the M/E page.',
 			options: [sourceIndexOption],
 			callback: (action) => {
 				const idx = Number(action.options['sourceIndex'] ?? 1)
@@ -145,6 +151,7 @@ export function getActionDefinitions(
 
 		transition: {
 			name: 'Transition to Source Slot',
+			description: 'Transition source slot N to program using the chosen effect and duration. Sets PVW first, then fires the transition.',
 			options: [
 				sourceIndexOption,
 				{
@@ -178,6 +185,7 @@ export function getActionDefinitions(
 
 		auto: {
 			name: 'Auto (Transition Current PVW to PGM)',
+			description: 'Fire a transition from whatever is currently on preview to program. Does nothing if preview is empty. Clears FTB if active.',
 			options: [
 				{
 					id: 'transitionType',
@@ -213,6 +221,7 @@ export function getActionDefinitions(
 
 		take: {
 			name: 'Take (Cut PVW to PGM)',
+			description: 'Hard-cut whatever is on preview to program instantly. Equivalent to pressing the T-bar all the way on a hardware mixer. Clears FTB if active.',
 			options: [],
 			callback: () => {
 				send({ type: 'TAKE' })
@@ -228,6 +237,7 @@ export function getActionDefinitions(
 		// -----------------------------------------------------------------------
 		ftb: {
 			name: 'Fade to Black',
+			description: 'Fade the program output to black. Toggle mode flips between on and off. FTB is automatically cleared on the next CUT or AUTO.',
 			options: [
 				{
 					id: 'mode',
@@ -263,6 +273,7 @@ export function getActionDefinitions(
 		// -----------------------------------------------------------------------
 		set_ovl_alpha: {
 			name: 'Set Overlay Alpha',
+			description: 'Set the opacity of the overlay layer as a percentage (0 = transparent, 100 = fully opaque).',
 			options: [
 				{
 					id: 'alpha',
@@ -283,6 +294,7 @@ export function getActionDefinitions(
 		// -----------------------------------------------------------------------
 		go_live: {
 			name: 'Go Live',
+			description: 'Start the outgoing stream. The On Air feedback turns red once the stream is active.',
 			options: [],
 			callback: () => {
 				send({ type: 'GO_LIVE' })
@@ -291,6 +303,7 @@ export function getActionDefinitions(
 
 		cut_stream: {
 			name: 'Cut Stream',
+			description: 'Stop the outgoing stream immediately.',
 			options: [],
 			callback: () => {
 				send({ type: 'CUT_STREAM' })
@@ -302,6 +315,7 @@ export function getActionDefinitions(
 		// -----------------------------------------------------------------------
 		graphic_on: {
 			name: 'Graphic On',
+			description: 'Make a named graphic overlay visible on the output. The Graphic Active feedback lights when it is showing.',
 			options: [
 				{
 					id: 'overlayId',
@@ -319,6 +333,7 @@ export function getActionDefinitions(
 
 		graphic_off: {
 			name: 'Graphic Off',
+			description: 'Hide a named graphic overlay from the output.',
 			options: [
 				{
 					id: 'overlayId',
@@ -339,6 +354,7 @@ export function getActionDefinitions(
 		// -----------------------------------------------------------------------
 		dsk_toggle: {
 			name: 'DSK Toggle',
+			description: 'Toggle a downstream keyer layer on or off. Enable "Use Force Visible" to set a specific state instead of toggling.',
 			options: [
 				{
 					id: 'layer',
@@ -377,6 +393,7 @@ export function getActionDefinitions(
 		// -----------------------------------------------------------------------
 		macro_exec: {
 			name: 'Execute Macro',
+			description: 'Run a production macro defined in Open Live. Macros can batch multiple switcher operations into a single button press.',
 			options: [
 				{
 					id: 'macroId',
