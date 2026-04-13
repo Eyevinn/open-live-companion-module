@@ -44,7 +44,7 @@ export function getLandingPresets(_productions: ProductionDoc[]): CompanionPrese
 			style: {
 				text: `$(OpenLive:prod_${slot}_name)`,
 				size: 'auto',
-				color: C.grey,
+				color: C.white,
 				bgcolor: C.dark,
 				alignment: 'center:center',
 			},
