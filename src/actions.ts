@@ -6,6 +6,7 @@ export interface ActionCallbacks {
 	selectProduction: (id: string) => void
 	backToProductions: () => void
 	refreshProductions: () => void
+	setVariable: (id: string, value: string) => void
 }
 
 /**
@@ -90,7 +91,12 @@ export function getActionDefinitions(
 			callback: (action) => {
 				const slot = Number(action.options['slot'] ?? 1)
 				const prod = getState().productions[slot - 1]
-				if (prod?._id) callbacks.selectProduction(prod._id)
+				if (prod?._id) {
+				callbacks.setVariable('navigate_page', '2')
+				callbacks.selectProduction(prod._id)
+			} else {
+				callbacks.setVariable('navigate_page', '1')
+			}
 			},
 		},
 

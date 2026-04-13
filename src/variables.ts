@@ -10,6 +10,7 @@ export function getVariableDefinitions(): CompanionVariableDefinition[] {
 		{ variableId: 'ftb_active', name: 'Fade to Black Active (true/false)' },
 		{ variableId: 'ovl_alpha', name: 'Overlay Alpha (0.0–1.0)' },
 		{ variableId: 'source_count', name: 'Number of sources in the current production' },
+		{ variableId: 'navigate_page', name: 'Page to navigate to after selecting a production (1 = stay, 2 = control)' },
 	]
 
 	// source_N_name (1–8) — name of the Nth source in the current production

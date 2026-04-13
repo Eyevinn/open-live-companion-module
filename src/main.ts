@@ -95,6 +95,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			on_air: 'false',
 			ftb_active: 'false',
 			ovl_alpha: '1',
+			navigate_page: '1',
 			...emptySourceVars(),
 			...emptyProductionSlotVars(),
 		})
@@ -256,6 +257,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			selectProduction: (id) => void this.selectProduction(id),
 			backToProductions: () => void this.backToProductions(),
 			refreshProductions: () => void this.refreshProductions(),
+			setVariable: (id, value) => this.setVariableValues({ [id]: value }),
 		}
 	}
 
