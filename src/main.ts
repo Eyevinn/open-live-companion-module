@@ -83,6 +83,20 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 
 	async init(config: ModuleConfig, _isFirstInit: boolean): Promise<void> {
 		this.config = config
+		// Initialise all variables synchronously before any async work so Companion
+		// never renders buttons with "undefined" while the first fetch is in-flight.
+		this.setVariableDefinitions(getVariableDefinitions())
+		this.setVariableValues({
+			selected_production_name: '',
+			production_name: '',
+			pgm_source: '',
+			pvw_source: '',
+			on_air: 'false',
+			ftb_active: 'false',
+			ovl_alpha: '1',
+			...emptySourceVars(),
+			...emptyProductionSlotVars(),
+		})
 		this.updateStatus(InstanceStatus.Connecting, 'Loading productions')
 		await this._setup()
 	}
@@ -128,7 +142,9 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 
 		try {
 			const all = await this._fetchProductions(apiUrl)
+			this.log('debug', `Fetched ${all.length} production(s): ${JSON.stringify(all.map(p => ({ id: p._id, name: p.name, status: p.status })))}`)
 			this.state.productions = all.filter((p) => p.status === 'active')
+			this.log('info', `Found ${this.state.productions.length} active production(s) out of ${all.length} total`)
 			this.updateStatus(InstanceStatus.Ok)
 			this._cancelRetry()
 		} catch (err) {
@@ -194,8 +210,9 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	public async refreshProductions(): Promise<void> {
 		try {
 			const all = await this._fetchProductions(this.config.apiUrl)
+			this.log('debug', `Refresh: fetched ${all.length} production(s): ${JSON.stringify(all.map(p => ({ id: p._id, name: p.name, status: p.status })))}`)
 			this.state.productions = all.filter((p) => p.status === 'active')
-			this.log('info', `Refreshed — ${this.state.productions.length} active production(s)`)
+			this.log('info', `Refreshed — ${this.state.productions.length} active production(s) out of ${all.length} total`)
 		} catch (err) {
 			this.log('warn', `Failed to refresh productions: ${this._extractErrorMessage(err)}`)
 		}
