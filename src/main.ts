@@ -182,18 +182,23 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		// Enrich source slots: API returns { sourceId, mixerInput }; we normalise to { id, name }
 		try {
 			const allSources = await this._fetchSources(apiUrl)
+			const VIRTUAL_SOURCE_NAMES: Record<string, string> = {
+				'__test1__': 'Pinwheel',
+				'__test2__': 'Colors',
+			}
 			const sourceMap = new Map(allSources.map((s) => [s.id, s.name]))
 			production.sources = (production.sources as unknown as Array<{ sourceId: string; mixerInput: string }>).map((slot) => ({
 				id: slot.sourceId,
-				name: sourceMap.get(slot.sourceId) ?? slot.sourceId,
+				name: sourceMap.get(slot.sourceId) ?? VIRTUAL_SOURCE_NAMES[slot.sourceId] ?? slot.sourceId,
 				type: 'srt',
 				mixerInput: slot.mixerInput,
 			}))
 		} catch {
 			// Fallback: use sourceId as name
+			const VIRTUAL_SOURCE_NAMES: Record<string, string> = { '__test1__': 'Pinwheel', '__test2__': 'Colors' }
 			production.sources = (production.sources as unknown as Array<{ sourceId: string; mixerInput: string }>).map((slot) => ({
 				id: slot.sourceId,
-				name: slot.sourceId,
+				name: VIRTUAL_SOURCE_NAMES[slot.sourceId] ?? slot.sourceId,
 				type: 'srt',
 				mixerInput: slot.mixerInput,
 			}))
