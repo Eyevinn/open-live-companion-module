@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
   "id": "eyevinn-open-live",
-  "name": "eyevinn-open-live",
-  "shortname": "open-live",
+  "name": "Open Live",
+  "shortname": "Open Live",
   "description": "Control Open Live broadcast productions — switch sources, manage preview/program, fade to black, go live, and more.",
   "version": "1.0.0",
   "license": "MIT",
@@ -20,7 +20,7 @@
     "apiVersion": "0.0.0",
     "entrypoint": "../dist/main.js"
   },
-  "legacyIds": [],
+  "legacyIds": ["openlive"],
   "manufacturer": "Eyevinn",
   "products": ["Open Live"],
   "keywords": ["broadcast", "live production", "switcher", "stream deck", "open live"]
