@@ -37,14 +37,16 @@ export interface WsClientEvents {
 
 export class WsClient extends EventEmitter {
 	private url: string
+	private authToken: string | undefined
 	private ws: WebSocket | null = null
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null
 	private currentBackoffMs = MIN_RECONNECT_MS
 	private destroyed = false
 
-	constructor(url: string) {
+	constructor(url: string, authToken?: string) {
 		super()
 		this.url = url
+		this.authToken = authToken
 	}
 
 	connect(): void {
@@ -63,7 +65,8 @@ export class WsClient extends EventEmitter {
 			this.ws = null
 		}
 
-		const ws = new WebSocket(this.url)
+		const headers = this.authToken ? { Authorization: `Bearer ${this.authToken}` } : undefined
+		const ws = new WebSocket(this.url, { headers })
 		this.ws = ws
 
 		ws.on('open', () => {

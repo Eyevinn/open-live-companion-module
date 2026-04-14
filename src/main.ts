@@ -5,6 +5,7 @@ import {
 	type SomeCompanionConfigField,
 } from '@companion-module/base'
 import { WsClient } from './ws-client.js'
+import { getSat, invalidateSat } from './sat.js'
 import { getVariableDefinitions, emptySourceVars, sourceVarsFromList, emptyProductionSlotVars, productionSlotVarsFromList } from './variables.js'
 import { getActionDefinitions, type ActionCallbacks } from './actions.js'
 import { getFeedbackDefinitions } from './feedbacks.js'
@@ -12,6 +13,7 @@ import { getLandingPresets, getControlPresets } from './presets.js'
 
 export interface ModuleConfig {
 	apiUrl: string
+	oscPat?: string
 }
 
 export interface ProductionSource {
@@ -127,6 +129,14 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 				width: 12,
 				tooltip: 'URL of the Open Live API — e.g. https://36e888958c.apps.osaas.io or http://localhost:3000',
 			},
+			{
+				type: 'textinput',
+				id: 'oscPat',
+				label: 'OSC PAT (optional)',
+				default: '',
+				width: 12,
+				tooltip: 'OSC Personal Access Token — required when connecting to an OSC-hosted Open Live instance',
+			},
 		]
 	}
 
@@ -212,7 +222,8 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 
 		// Derive WS URL: http→ws, https→wss, localhost→127.0.0.1
 		const wsUrl = this._normaliseUrl(apiUrl).replace(/^http/, 'ws') + `/ws/productions/${encodeURIComponent(productionId)}/controller`
-		this._openWebSocket(wsUrl)
+		const sat = await getSat(this.config.oscPat).catch(() => undefined)
+		this._openWebSocket(wsUrl, sat)
 		this._startPolling()
 	}
 
@@ -309,9 +320,9 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	// WebSocket
 	// -----------------------------------------------------------------------
 
-	private _openWebSocket(url: string): void {
+	private _openWebSocket(url: string, authToken?: string): void {
 		this.log('debug', `Connecting to WebSocket: ${url}`)
-		const client = new WsClient(url)
+		const client = new WsClient(url, authToken)
 		this.wsClient = client
 
 		client.on('connected', () => {
@@ -441,6 +452,16 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		return url.replace(/^(https?:\/\/)localhost\b/, '$1127.0.0.1')
 	}
 
+	private async _authHeaders(): Promise<Record<string, string>> {
+		try {
+			const sat = await getSat(this.config.oscPat)
+			return sat ? { Authorization: `Bearer ${sat}` } : {}
+		} catch (err) {
+			this.log('warn', `SAT exchange failed: ${this._extractErrorMessage(err)}`)
+			return {}
+		}
+	}
+
 	private async _fetchProductions(apiUrl: string): Promise<ProductionDoc[]> {
 		const url = `${this._normaliseUrl(apiUrl)}/api/v1/productions`
 		this.log('debug', `Fetching productions from: ${url}`)
@@ -448,9 +469,10 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		const timeout = setTimeout(() => ctrl.abort(), 5000)
 		try {
 			const res = await fetch(url, {
-				headers: { Accept: 'application/json' },
+				headers: { Accept: 'application/json', ...await this._authHeaders() },
 				signal: ctrl.signal,
 			})
+			if (res.status === 401) { invalidateSat(); throw new Error('HTTP 401 — invalid or expired token') }
 			if (!res.ok) throw new Error(`HTTP ${res.status}`)
 			return (await res.json()) as ProductionDoc[]
 		} finally {
@@ -463,9 +485,10 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		const timeout = setTimeout(() => ctrl.abort(), 5000)
 		try {
 			const res = await fetch(`${this._normaliseUrl(apiUrl)}/api/v1/sources`, {
-				headers: { Accept: 'application/json' },
+				headers: { Accept: 'application/json', ...await this._authHeaders() },
 				signal: ctrl.signal,
 			})
+			if (res.status === 401) { invalidateSat(); throw new Error('HTTP 401 — invalid or expired token') }
 			if (!res.ok) throw new Error(`HTTP ${res.status}`)
 			return (await res.json()) as Array<{ id: string; name: string }>
 		} finally {
@@ -478,9 +501,10 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		const timeout = setTimeout(() => ctrl.abort(), 5000)
 		try {
 			const res = await fetch(`${this._normaliseUrl(apiUrl)}/api/v1/productions/${encodeURIComponent(productionId)}`, {
-				headers: { Accept: 'application/json' },
+				headers: { Accept: 'application/json', ...await this._authHeaders() },
 				signal: ctrl.signal,
 			})
+			if (res.status === 401) { invalidateSat(); throw new Error('HTTP 401 — invalid or expired token') }
 			if (!res.ok) throw new Error(`HTTP ${res.status}`)
 			return (await res.json()) as ProductionDoc
 		} finally {
