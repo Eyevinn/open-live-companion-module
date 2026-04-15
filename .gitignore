@@ -1,2 +1,5 @@
 node_modules/
+!node_modules/@companion-module/
+!node_modules/@companion-module/base/
+!node_modules/@companion-module/base/package.json
 yarn.lock
