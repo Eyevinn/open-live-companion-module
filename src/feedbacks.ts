@@ -18,7 +18,6 @@ const sourceIndexOption = {
 export function getFeedbackDefinitions(
 	getState: () => ModuleState,
 	production: ProductionDoc | null,
-	log?: (level: 'debug' | 'info' | 'warn' | 'error', msg: string) => void,
 ): CompanionFeedbackDefinitions {
 	const graphics = production?.graphics ?? []
 	const graphicChoices = graphics.map((g) => ({ id: g.id, label: g.name }))
@@ -38,9 +37,7 @@ export function getFeedbackDefinitions(
 				const idx = Number(feedback.options['sourceIndex'] ?? 1)
 				const source = production?.sources[idx - 1]
 				if (!source) return false
-				const result = state.pgm !== null && state.pgm === source.mixerInput
-				log?.('debug', `pgm_tally[${idx}]: pgm=${state.pgm ?? 'null'}, mixerInput=${source.mixerInput}, result=${result}`)
-				return result
+				return state.pgm !== null && state.pgm === source.mixerInput
 			},
 		},
 
@@ -58,9 +55,7 @@ export function getFeedbackDefinitions(
 				const idx = Number(feedback.options['sourceIndex'] ?? 1)
 				const source = production?.sources[idx - 1]
 				if (!source) return false
-				const result = state.pvw !== null && state.pvw === source.mixerInput
-				log?.('debug', `pvw_tally[${idx}]: pvw=${state.pvw ?? 'null'}, mixerInput=${source.mixerInput}, result=${result}`)
-				return result
+				return state.pvw !== null && state.pvw === source.mixerInput
 			},
 		},
 
@@ -136,6 +131,115 @@ export function getFeedbackDefinitions(
 			},
 		},
 
+		dsk_configured: {
+			type: 'boolean',
+			name: 'DSK Configured',
+			description: 'Active when the specified DSK layer is present on the production',
+			options: [
+				{
+					id: 'layer',
+					type: 'number',
+					label: 'DSK Layer (0-based: 0 = DSK 1)',
+					default: 0,
+					min: 0,
+					max: 7,
+				},
+			],
+			defaultStyle: {
+				color: combineRgb(255, 255, 255),
+				bgcolor: combineRgb(30, 30, 30),
+			},
+			callback: (feedback) => {
+				const layer = Number(feedback.options['layer'] ?? 0)
+				return layer in getState().dskLayers
+			},
+		},
+
+		audio_ch_inactive: {
+			type: 'boolean',
+			name: 'Audio Channel Inactive',
+			description: 'Active when the given audio channel slot has no strip (production has fewer strips than this index)',
+			options: [
+				{
+					id: 'ch',
+					type: 'number',
+					label: 'Channel Slot (1–8)',
+					default: 1,
+					min: 1,
+					max: 8,
+				},
+			],
+			defaultStyle: {
+				text: '',
+				bgcolor: combineRgb(30, 30, 30),
+				color: combineRgb(50, 50, 50),
+			},
+			callback: (feedback) => {
+				const ch = Number(feedback.options['ch'] ?? 1)
+				return ch > getState().audioChannelCount
+			},
+		},
+
+		audio_muted: {
+			type: 'boolean',
+			name: 'Audio Muted',
+			description: 'Active when the specified audio channel is muted',
+			options: [
+				{
+					id: 'elementId',
+					type: 'textinput',
+					label: 'Channel ID (e.g. ch1, main)',
+					default: 'ch1',
+				},
+			],
+			defaultStyle: {
+				bgcolor: combineRgb(200, 50, 0),
+				color: combineRgb(255, 255, 255),
+			},
+			callback: (feedback) => {
+				const elementId = String(feedback.options['elementId'] ?? 'ch1')
+				return getState().audioChannels[elementId]?.muted === true
+			},
+		},
+
+		audio_ch_selected: {
+			type: 'boolean',
+			name: 'Audio Channel Selected',
+			description: 'Active when the given audio channel is the current X-button target',
+			options: [
+				{
+					id: 'elementId',
+					type: 'textinput',
+					label: 'Channel ID (e.g. ch1, main)',
+					default: 'ch1',
+				},
+			],
+			defaultStyle: {
+				bgcolor: combineRgb(249, 115, 22),
+				color: combineRgb(255, 255, 255),
+			},
+			callback: (feedback) => {
+				const elementId = String(feedback.options['elementId'] ?? 'ch1')
+				return getState().selectedAudioCh === elementId
+			},
+		},
+
+		audio_muted_x: {
+			type: 'boolean',
+			name: 'Audio Muted (Selected Channel)',
+			description: 'Active when the currently selected audio channel is muted',
+			options: [],
+			defaultStyle: {
+				bgcolor: combineRgb(200, 50, 0),
+				color: combineRgb(255, 255, 255),
+			},
+			callback: () => {
+				const elementId = getState().selectedAudioCh
+				if (!elementId) return false
+				return getState().audioChannels[elementId]?.muted === true
+			},
+		},
+
 		dsk_visible: {
 			type: 'boolean',
 			name: 'DSK Visible',
@@ -144,18 +248,18 @@ export function getFeedbackDefinitions(
 				{
 					id: 'layer',
 					type: 'number',
-					label: 'DSK Layer',
-					default: 1,
-					min: 1,
-					max: 8,
+					label: 'DSK Layer (0-based: 0 = DSK 1)',
+					default: 0,
+					min: 0,
+					max: 7,
 				},
 			],
 			defaultStyle: {
-				bgcolor: combineRgb(255, 200, 0),
-				color: combineRgb(0, 0, 0),
+				bgcolor: combineRgb(249, 115, 22),
+				color: combineRgb(255, 255, 255),
 			},
 			callback: (feedback) => {
-				const layer = Number(feedback.options['layer'] ?? 1)
+				const layer = Number(feedback.options['layer'] ?? 0)
 				return getState().dskLayers[layer] === true
 			},
 		},

@@ -3,6 +3,7 @@ import type { CompanionVariableDefinition } from '@companion-module/base'
 export function getVariableDefinitions(): CompanionVariableDefinition[] {
 	const defs: CompanionVariableDefinition[] = [
 		{ variableId: 'selected_production_name', name: 'Name of selected production' },
+		{ variableId: 'selected_audio_ch', name: 'Currently selected audio channel for X buttons' },
 		{ variableId: 'production_name', name: 'Name of connected production' },
 		{ variableId: 'pgm_source', name: 'Current PGM source ID' },
 		{ variableId: 'pvw_source', name: 'Current PVW source ID' },
@@ -10,12 +11,16 @@ export function getVariableDefinitions(): CompanionVariableDefinition[] {
 		{ variableId: 'ftb_active', name: 'Fade to Black Active (true/false)' },
 		{ variableId: 'ovl_alpha', name: 'Overlay Alpha (0.0–1.0)' },
 		{ variableId: 'source_count', name: 'Number of sources in the current production' },
-		{ variableId: 'navigate_page', name: 'Page to navigate to after selecting a production (1 = stay, 2 = control)' },
 	]
 
 	// source_N_name (1–8) — name of the Nth source in the current production
 	for (let i = 1; i <= 8; i++) {
 		defs.push({ variableId: `source_${i}_name`, name: `Source ${i} name` })
+	}
+
+	// ch_N_name (1–8) — name of the Nth audio channel (sorted by mixerInput, non-audio types excluded)
+	for (let i = 1; i <= 8; i++) {
+		defs.push({ variableId: `ch${i}_name`, name: `Audio channel ${i} name` })
 	}
 
 	// prod_N_name (1–31) — name of the Nth active production in the landing list
@@ -28,8 +33,9 @@ export function getVariableDefinitions(): CompanionVariableDefinition[] {
 
 /** Returns an object suitable for setVariableValues that clears all source-name slots. */
 export function emptySourceVars(): Record<string, string> {
-	const v: Record<string, string> = { source_count: '0' }
+	const v: Record<string, string> = { source_count: '0', selected_audio_ch: '' }
 	for (let i = 1; i <= 8; i++) v[`source_${i}_name`] = ''
+	for (let i = 1; i <= 8; i++) v[`ch${i}_name`] = ''
 	return v
 }
 

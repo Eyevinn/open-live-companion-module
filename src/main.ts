@@ -44,6 +44,7 @@ export interface ProductionDoc {
 	sources: ProductionSource[]
 	graphics: ProductionGraphic[]
 	macros: ProductionMacro[]
+	graphicAssignments?: Array<{ dskInput: string; graphicId: string }>
 }
 
 export interface ModuleState {
@@ -56,6 +57,9 @@ export interface ModuleState {
 	ovlAlpha: number // 0.0–1.0
 	graphics: Record<string, boolean>
 	dskLayers: Record<number, boolean>
+	audioChannels: Record<string, { volume: number; muted: boolean }>
+	audioChannelCount: number
+	selectedAudioCh: string
 }
 
 const POLL_INTERVAL_MS = 10_000
@@ -64,6 +68,8 @@ const RETRY_SETUP_MS = 15_000
 class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	private wsClient: WsClient | null = null
 	private selectedProduction: ProductionDoc | null = null
+	private audioSources: ProductionSource[] = []
+	private pendingSlot: number | null = null
 	private config: ModuleConfig = { apiUrl: 'http://localhost:8080' }
 	private pollTimer: ReturnType<typeof setInterval> | null = null
 	private retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -78,6 +84,9 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		ovlAlpha: 1,
 		graphics: {},
 		dskLayers: {},
+		audioChannels: {},
+		audioChannelCount: 0,
+		selectedAudioCh: '',
 	}
 
 	// -----------------------------------------------------------------------
@@ -97,7 +106,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			on_air: 'false',
 			ftb_active: 'false',
 			ovl_alpha: '1',
-			navigate_page: '1',
+			selected_audio_ch: '',
 			...emptySourceVars(),
 			...emptyProductionSlotVars(),
 		})
@@ -190,34 +199,53 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			return
 		}
 
-		// Enrich source slots: API returns { sourceId, mixerInput }; we normalise to { id, name }
+		// Enrich source slots: API returns { sourceId, mixerInput }; we normalise to { id, name, type }
+		const NON_AUDIO_TYPES = new Set(['html', 'whip', 'test1', 'test2'])
+		const VIRTUAL_SOURCE_NAMES: Record<string, string> = {
+			'__test1__': 'Pinwheel',
+			'__test2__': 'Colors',
+		}
+		let sourceTypeMap = new Map<string, string>()
 		try {
 			const allSources = await this._fetchSources(apiUrl)
-			const VIRTUAL_SOURCE_NAMES: Record<string, string> = {
-				'__test1__': 'Pinwheel',
-				'__test2__': 'Colors',
-			}
-			const sourceMap = new Map(allSources.map((s) => [s.id, s.name]))
+			const sourceNameMap = new Map(allSources.map((s) => [s.id, s.name]))
+			sourceTypeMap = new Map(allSources.map((s) => [s.id, s.streamType]))
 			production.sources = (production.sources as unknown as Array<{ sourceId: string; mixerInput: string }>).map((slot) => ({
 				id: slot.sourceId,
-				name: sourceMap.get(slot.sourceId) ?? VIRTUAL_SOURCE_NAMES[slot.sourceId] ?? slot.sourceId,
-				type: 'srt',
+				name: sourceNameMap.get(slot.sourceId) ?? VIRTUAL_SOURCE_NAMES[slot.sourceId] ?? slot.sourceId,
+				type: sourceTypeMap.get(slot.sourceId) ?? 'srt',
 				mixerInput: slot.mixerInput,
 			}))
 		} catch {
-			// Fallback: use sourceId as name
-			const VIRTUAL_SOURCE_NAMES: Record<string, string> = { '__test1__': 'Pinwheel', '__test2__': 'Colors' }
+			// Fallback: use sourceId as name, unknown type
 			production.sources = (production.sources as unknown as Array<{ sourceId: string; mixerInput: string }>).map((slot) => ({
 				id: slot.sourceId,
 				name: VIRTUAL_SOURCE_NAMES[slot.sourceId] ?? slot.sourceId,
-				type: 'srt',
+				type: sourceTypeMap.get(slot.sourceId) ?? 'srt',
 				mixerInput: slot.mixerInput,
 			}))
 		}
 
+		// Compute audio channels: sort by mixerInput, skip virtual (not in DB) and non-audio types.
+		// Matches the backend's applyAudioFollow channel ordering exactly.
+		const audioSources = [...production.sources]
+			.sort((a, b) => a.mixerInput.localeCompare(b.mixerInput))
+			.filter((s) => sourceTypeMap.has(s.id) && !NON_AUDIO_TYPES.has(s.type))
+
 		this.selectedProduction = production
 		this.state.selectedProductionId = productionId
 		this._resetControlState()
+		this.audioSources = audioSources
+
+		// Seed dskLayers from graphicAssignments so only currently-configured DSK
+		// layers are known. This is authoritative: stale dskLayers entries in the DB
+		// (left behind when a DSK is removed) are ignored. WS DSK_STATE messages
+		// then update the visible/hidden state for these layers.
+		for (const assignment of production.graphicAssignments ?? []) {
+			const m = /dsk_in_(\d+)$/.exec(assignment.dskInput)
+			if (m) this.state.dskLayers[parseInt(m[1], 10)] = false
+		}
+
 		this._registerControlMode()
 
 		// Derive WS URL: http→ws, https→wss, localhost→127.0.0.1
@@ -236,6 +264,19 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		} catch (err) {
 			this.log('warn', `Failed to refresh productions: ${this._extractErrorMessage(err)}`)
 		}
+
+		// If a slot was pending (clicked before productions were loaded), auto-select it.
+		const pending = this.pendingSlot
+		this.pendingSlot = null
+		if (pending !== null) {
+			const prod = this.state.productions[pending - 1]
+			if (prod?._id) {
+				this.log('info', `Auto-selecting pending slot ${pending}: "${prod.name}"`)
+				void this.selectProduction(prod._id)
+				return // selectProduction calls _registerControlMode; skip _registerLandingMode
+			}
+		}
+
 		this._registerLandingMode()
 	}
 
@@ -268,7 +309,12 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			selectProduction: (id) => void this.selectProduction(id),
 			backToProductions: () => void this.backToProductions(),
 			refreshProductions: () => void this.refreshProductions(),
-			setVariable: (id, value) => this.setVariableValues({ [id]: value }),
+			setPendingSlot: (slot) => { this.pendingSlot = slot },
+			setSelectedAudioCh: (elementId: string) => {
+				this.state.selectedAudioCh = elementId
+				this.setVariableValues({ selected_audio_ch: elementId })
+				this.checkFeedbacks('audio_ch_selected', 'audio_muted_x')
+			},
 		}
 	}
 
@@ -277,8 +323,13 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		this.setActionDefinitions(
 			getActionDefinitions(() => this.wsClient, null, () => this.state, this._callbacks()),
 		)
-		this.setFeedbackDefinitions(getFeedbackDefinitions(() => this.state, null, this.log.bind(this)))
-		this.setPresetDefinitions(getLandingPresets(this.state.productions))
+		this.setFeedbackDefinitions(getFeedbackDefinitions(() => this.state, null))
+		const { back_to_productions, ...restControlPresets } = getControlPresets(null)
+		this.setPresetDefinitions({
+			back_to_productions,
+			...getLandingPresets(this.state.productions),
+			...restControlPresets,
+		})
 		this.setVariableValues({
 			selected_production_name: '',
 			production_name: '',
@@ -290,17 +341,29 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			...emptySourceVars(),
 			...productionSlotVarsFromList(this.state.productions),
 		})
-		this.checkFeedbacks('production_slot_occupied')
+		this.checkFeedbacks('production_slot_occupied', 'audio_ch_inactive')
 	}
 
 	private _registerControlMode(): void {
+		// Set audioChannelCount before registering feedbacks so Companion's initial
+		// evaluation (triggered by setFeedbackDefinitions) sees the correct count.
+		this.state.audioChannelCount = this.audioSources.length
 		this.setVariableDefinitions(getVariableDefinitions())
 		this.setActionDefinitions(
 			getActionDefinitions(() => this.wsClient, this.selectedProduction, () => this.state, this._callbacks()),
 		)
-		this.setFeedbackDefinitions(getFeedbackDefinitions(() => this.state, this.selectedProduction, this.log.bind(this)))
-		this.setPresetDefinitions(getControlPresets(this.selectedProduction))
+		this.setFeedbackDefinitions(getFeedbackDefinitions(() => this.state, this.selectedProduction))
+		const { back_to_productions, ...restControlPresets } = getControlPresets(this.selectedProduction)
+		this.setPresetDefinitions({
+			back_to_productions,
+			...getLandingPresets(this.state.productions),
+			...restControlPresets,
+		})
 		this.log('debug', `Sources: ${JSON.stringify(this.selectedProduction?.sources?.map(s => `${s.name}(${s.id})`))}`)
+		const audioChannelVars: Record<string, string> = {}
+		for (let i = 1; i <= 8; i++) {
+			audioChannelVars[`ch${i}_name`] = this.audioSources[i - 1]?.name ?? ''
+		}
 		this.setVariableValues({
 			selected_production_name: this.selectedProduction?.name ?? '',
 			production_name: this.selectedProduction?.name ?? '',
@@ -310,10 +373,11 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			ftb_active: 'false',
 			ovl_alpha: '1',
 			...sourceVarsFromList(this.selectedProduction?.sources ?? []),
+			...audioChannelVars,
 		})
 		// Force Companion to re-evaluate all feedbacks now that definitions are registered.
 		this.log('debug', `Control mode registered — forcing checkFeedbacks`)
-		this.checkFeedbacks('pgm_tally', 'pvw_tally', 'on_air', 'ftb_active', 'graphic_active', 'dsk_visible')
+		this.checkFeedbacks('pgm_tally', 'pvw_tally', 'on_air', 'ftb_active', 'graphic_active', 'dsk_configured', 'dsk_visible', 'audio_muted', 'audio_ch_inactive', 'audio_ch_selected', 'audio_muted_x')
 	}
 
 	// -----------------------------------------------------------------------
@@ -329,7 +393,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			this.log('info', 'WebSocket connected')
 			this.updateStatus(InstanceStatus.Ok)
 			// Re-evaluate all feedbacks on (re)connect so stale state is cleared
-			this.checkFeedbacks('pgm_tally', 'pvw_tally', 'on_air', 'ftb_active', 'graphic_active', 'dsk_visible')
+			this.checkFeedbacks('pgm_tally', 'pvw_tally', 'on_air', 'ftb_active', 'graphic_active', 'dsk_configured', 'dsk_visible', 'audio_muted', 'audio_ch_inactive', 'audio_ch_selected', 'audio_muted_x')
 		})
 
 		client.on('disconnected', () => {
@@ -373,7 +437,14 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 				break
 			}
 			case 'DSK_STATE': {
+				const wasKnown = msg.layer in this.state.dskLayers
+				// When graphicAssignments was available at select time, dskLayers was
+				// pre-seeded with only the currently-configured layers. Ignore DSK_STATE
+				// for any layer not in that seed — it's a stale DB remnant from a
+				// previously-removed DSK.
+				if (!wasKnown && this.selectedProduction?.graphicAssignments !== undefined) break
 				this.state.dskLayers[msg.layer] = msg.visible
+				if (!wasKnown) this.checkFeedbacks('dsk_configured')
 				this.checkFeedbacks('dsk_visible')
 				break
 			}
@@ -386,6 +457,16 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			case 'OVL_STATE': {
 				this.state.ovlAlpha = msg.alpha
 				this.setVariableValues({ ovl_alpha: String(msg.alpha) })
+				break
+			}
+			case 'AUDIO_STATE': {
+				const ch = this.state.audioChannels[msg.elementId] ?? { volume: 1, muted: false }
+				if (msg.property === 'volume') {
+					this.state.audioChannels[msg.elementId] = { ...ch, volume: msg.value as number }
+				} else if (msg.property === 'mute') {
+					this.state.audioChannels[msg.elementId] = { ...ch, muted: msg.value as boolean }
+					this.checkFeedbacks('audio_muted')
+				}
 				break
 			}
 			case 'MACRO_EXECUTED': {
@@ -480,7 +561,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		}
 	}
 
-	private async _fetchSources(apiUrl: string): Promise<Array<{ id: string; name: string }>> {
+	private async _fetchSources(apiUrl: string): Promise<Array<{ id: string; name: string; streamType: string }>> {
 		const ctrl = new AbortController()
 		const timeout = setTimeout(() => ctrl.abort(), 5000)
 		try {
@@ -490,7 +571,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			})
 			if (res.status === 401) { invalidateSat(); throw new Error('HTTP 401 — invalid or expired token') }
 			if (!res.ok) throw new Error(`HTTP ${res.status}`)
-			return (await res.json()) as Array<{ id: string; name: string }>
+			return (await res.json()) as Array<{ id: string; name: string; streamType: string }>
 		} finally {
 			clearTimeout(timeout)
 		}
@@ -563,6 +644,11 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		this.state.ftbActive = false
 		this.state.graphics = {}
 		this.state.dskLayers = {}
+		this.state.audioChannels = {}
+		this.state.audioChannelCount = 0
+		this.state.selectedAudioCh = ''
+		this.audioSources = []
+		this.pendingSlot = null
 	}
 }
 

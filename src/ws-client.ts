@@ -8,6 +8,7 @@ export type WsInboundMessage =
 	| { type: 'DSK_STATE'; layer: number; visible: boolean }
 	| { type: 'FTB_STATE'; active: boolean }
 	| { type: 'OVL_STATE'; alpha: number }
+	| { type: 'AUDIO_STATE'; elementId: string; property: 'volume' | 'mute'; value: number | boolean }
 	| { type: 'MACRO_EXECUTED'; macroId: string }
 	| { type: 'MACRO_ERROR'; macroId: string; failedActionIndex: number; error: string }
 	| { type: 'ERROR'; error: string }
@@ -25,6 +26,7 @@ export type WsOutboundMessage =
 	| { type: 'GRAPHIC_OFF'; overlayId: string }
 	| { type: 'DSK_TOGGLE'; layer: number; visible?: boolean }
 	| { type: 'MACRO_EXEC'; macroId: string }
+	| { type: 'AUDIO_SET'; elementId: string; property: 'volume' | 'mute'; value: number | boolean }
 
 const MIN_RECONNECT_MS = 1000
 const MAX_RECONNECT_MS = 30000

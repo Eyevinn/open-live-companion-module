@@ -6,7 +6,8 @@ export interface ActionCallbacks {
 	selectProduction: (id: string) => void
 	backToProductions: () => void
 	refreshProductions: () => void
-	setVariable: (id: string, value: string) => void
+	setPendingSlot: (slot: number) => void
+	setSelectedAudioCh: (elementId: string) => void
 }
 
 /**
@@ -92,13 +93,18 @@ export function getActionDefinitions(
 			],
 			callback: (action) => {
 				const slot = Number(action.options['slot'] ?? 1)
-				const prod = getState().productions[slot - 1]
-				if (prod?._id) {
-				callbacks.setVariable('navigate_page', '2')
-				callbacks.selectProduction(prod._id)
-			} else {
-				callbacks.setVariable('navigate_page', '1')
-			}
+				const state = getState()
+				if (state.productions.length === 0) {
+					// Productions not loaded yet — store the pending slot and refresh;
+					// the config's set_page action (hardcoded page 2) navigates immediately.
+					callbacks.setPendingSlot(slot)
+					callbacks.refreshProductions()
+					return
+				}
+				const prod = state.productions[slot - 1]
+				if (prod?._id && state.selectedProductionId !== prod._id) {
+					callbacks.selectProduction(prod._id)
+				}
 			},
 		},
 
@@ -359,10 +365,10 @@ export function getActionDefinitions(
 				{
 					id: 'layer',
 					type: 'number',
-					label: 'DSK Layer',
-					default: 1,
-					min: 1,
-					max: 8,
+					label: 'DSK Layer (0-based: 0 = DSK 1)',
+					default: 0,
+					min: 0,
+					max: 7,
 				},
 				{
 					id: 'visible',
@@ -378,19 +384,168 @@ export function getActionDefinitions(
 				},
 			],
 			callback: (action) => {
-				const layer = Number(action.options['layer'] ?? 1)
+				const layer = Number(action.options['layer'] ?? 0)
+				if (!(layer in getState().dskLayers)) return
 				const useForce = Boolean(action.options['useForceVisible'])
-				if (useForce) {
-					send({ type: 'DSK_TOGGLE', layer, visible: Boolean(action.options['visible']) })
-				} else {
-					send({ type: 'DSK_TOGGLE', layer })
-				}
+				const visible = useForce
+					? Boolean(action.options['visible'])
+					: !getState().dskLayers[layer]
+				send({ type: 'DSK_TOGGLE', layer, visible })
 			},
 		},
 
 		// -----------------------------------------------------------------------
 		// Macros
 		// -----------------------------------------------------------------------
+		// -----------------------------------------------------------------------
+		// Audio
+		// -----------------------------------------------------------------------
+		audio_mute_toggle: {
+			name: 'Toggle Audio Mute',
+			description: 'Toggle the mute state of an audio channel. Use "ch1"–"ch8" for source channels or "main" for the master fader.',
+			options: [
+				{
+					id: 'elementId',
+					type: 'textinput',
+					label: 'Channel ID (e.g. ch1, main)',
+					default: 'ch1',
+				},
+			],
+			callback: (action) => {
+				const elementId = String(action.options['elementId'] ?? 'ch1')
+				const ch = getState().audioChannels[elementId]
+				const muted = ch !== undefined ? !ch.muted : true
+				send({ type: 'AUDIO_SET', elementId, property: 'mute', value: muted })
+			},
+		},
+
+		audio_volume_nudge: {
+			name: 'Nudge Audio Volume',
+			description: 'Increase or decrease an audio channel\'s fader level by a fixed step. Assign to rotate_left/rotate_right on a rotary button.',
+			options: [
+				{
+					id: 'elementId',
+					type: 'textinput',
+					label: 'Channel ID (e.g. ch1, main)',
+					default: 'ch1',
+				},
+				{
+					id: 'direction',
+					type: 'dropdown',
+					label: 'Direction',
+					choices: [
+						{ id: 'up', label: 'Up (+)' },
+						{ id: 'down', label: 'Down (−)' },
+					],
+					default: 'up',
+				},
+				{
+					id: 'step',
+					type: 'number',
+					label: 'Step (%)',
+					default: 5,
+					min: 1,
+					max: 25,
+				},
+			],
+			callback: (action) => {
+				const elementId = String(action.options['elementId'] ?? 'ch1')
+				const direction = String(action.options['direction'] ?? 'up')
+				const step = Number(action.options['step'] ?? 5) / 100
+				const ch = getState().audioChannels[elementId]
+				const current = ch?.volume ?? 1
+				const raw = direction === 'up' ? current + step : current - step
+				const atFloor = raw <= 0.0001
+				const wasAtFloor = current <= 0.0001
+				const volume = Math.max(0.0001, Math.min(0.9999, raw))
+				if (atFloor) {
+					if (!wasAtFloor) send({ type: 'AUDIO_SET', elementId, property: 'volume', value: 0.0001 })
+					if (!ch?.muted) send({ type: 'AUDIO_SET', elementId, property: 'mute', value: true })
+					return
+				}
+				if (ch?.muted) send({ type: 'AUDIO_SET', elementId, property: 'mute', value: false })
+				if (volume === current) return
+				send({ type: 'AUDIO_SET', elementId, property: 'volume', value: volume })
+			},
+		},
+
+		// -----------------------------------------------------------------------
+		// Audio X (selected-channel)
+		// -----------------------------------------------------------------------
+		audio_set_selected: {
+			name: 'Set Selected Audio Channel',
+			description: 'Set (or clear) the X-button target channel. Assign to the down and up events of a channel selector button.',
+			options: [
+				{
+					id: 'elementId',
+					type: 'textinput',
+					label: 'Channel ID (e.g. ch1, main; empty to clear)',
+					default: '',
+				},
+			],
+			callback: (action) => {
+				callbacks.setSelectedAudioCh(String(action.options['elementId'] ?? ''))
+			},
+		},
+
+		audio_mute_x: {
+			name: 'Toggle Mute (Selected Channel)',
+			description: 'Toggle mute on whichever channel is currently selected via Set Selected Audio Channel.',
+			options: [],
+			callback: () => {
+				const elementId = getState().selectedAudioCh
+				if (!elementId) return
+				const ch = getState().audioChannels[elementId]
+				const muted = ch !== undefined ? !ch.muted : true
+				send({ type: 'AUDIO_SET', elementId, property: 'mute', value: muted })
+			},
+		},
+
+		audio_nudge_x: {
+			name: 'Nudge Volume (Selected Channel)',
+			description: 'Nudge volume up or down on whichever channel is currently selected.',
+			options: [
+				{
+					id: 'direction',
+					type: 'dropdown',
+					label: 'Direction',
+					choices: [
+						{ id: 'up', label: 'Up (+)' },
+						{ id: 'down', label: 'Down (−)' },
+					],
+					default: 'up',
+				},
+				{
+					id: 'step',
+					type: 'number',
+					label: 'Step (%)',
+					default: 5,
+					min: 1,
+					max: 25,
+				},
+			],
+			callback: (action) => {
+				const elementId = getState().selectedAudioCh
+				if (!elementId) return
+				const direction = String(action.options['direction'] ?? 'up')
+				const step = Number(action.options['step'] ?? 5) / 100
+				const ch = getState().audioChannels[elementId]
+				const current = ch?.volume ?? 1
+				const raw = direction === 'up' ? current + step : current - step
+				const atFloor = raw <= 0.0001
+				const wasAtFloor = current <= 0.0001
+				const volume = Math.max(0.0001, Math.min(0.9999, raw))
+				if (atFloor) {
+					if (!wasAtFloor) send({ type: 'AUDIO_SET', elementId, property: 'volume', value: 0.0001 })
+					if (!ch?.muted) send({ type: 'AUDIO_SET', elementId, property: 'mute', value: true })
+					return
+				}
+				if (ch?.muted) send({ type: 'AUDIO_SET', elementId, property: 'mute', value: false })
+				if (volume === current) return
+				send({ type: 'AUDIO_SET', elementId, property: 'volume', value: volume })
+			},
+		},
+
 		macro_exec: {
 			name: 'Execute Macro',
 			description: 'Run a production macro defined in Open Live. Macros can batch multiple switcher operations into a single button press.',
