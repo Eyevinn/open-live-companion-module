@@ -13,13 +13,13 @@ export function getVariableDefinitions(): CompanionVariableDefinition[] {
 		{ variableId: 'source_count', name: 'Number of sources in the current production' },
 	]
 
-	// source_N_name (1–8) — name of the Nth source in the current production
-	for (let i = 1; i <= 8; i++) {
+	// source_N_name (1–16) — name of the Nth source in the current production
+	for (let i = 1; i <= 16; i++) {
 		defs.push({ variableId: `source_${i}_name`, name: `Source ${i} name` })
 	}
 
-	// ch_N_name (1–8) — name of the Nth audio channel (sorted by mixerInput, non-audio types excluded)
-	for (let i = 1; i <= 8; i++) {
+	// ch_N_name (1–16) — name of the Nth audio channel (sorted by mixerInput, non-audio types excluded)
+	for (let i = 1; i <= 16; i++) {
 		defs.push({ variableId: `ch${i}_name`, name: `Audio channel ${i} name` })
 	}
 
@@ -34,15 +34,15 @@ export function getVariableDefinitions(): CompanionVariableDefinition[] {
 /** Returns an object suitable for setVariableValues that clears all source-name slots. */
 export function emptySourceVars(): Record<string, string> {
 	const v: Record<string, string> = { source_count: '0', selected_audio_ch: '' }
-	for (let i = 1; i <= 8; i++) v[`source_${i}_name`] = ''
-	for (let i = 1; i <= 8; i++) v[`ch${i}_name`] = ''
+	for (let i = 1; i <= 16; i++) v[`source_${i}_name`] = ''
+	for (let i = 1; i <= 16; i++) v[`ch${i}_name`] = ''
 	return v
 }
 
 /** Returns an object suitable for setVariableValues populated from a source array. */
 export function sourceVarsFromList(sources: Array<{ name: string }>): Record<string, string> {
 	const v: Record<string, string> = { source_count: String(sources.length) }
-	for (let i = 1; i <= 8; i++) {
+	for (let i = 1; i <= 16; i++) {
 		v[`source_${i}_name`] = sources[i - 1]?.name ?? ''
 	}
 	return v

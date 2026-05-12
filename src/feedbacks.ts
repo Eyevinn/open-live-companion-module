@@ -9,10 +9,10 @@ import type { ModuleState, ProductionDoc } from './main.js'
 const sourceIndexOption = {
 	id: 'sourceIndex',
 	type: 'number' as const,
-	label: 'Source Slot (1–8)',
+	label: 'Source Slot (1–16)',
 	default: 1,
 	min: 1,
-	max: 8,
+	max: 16,
 }
 
 export function getFeedbackDefinitions(
@@ -163,10 +163,10 @@ export function getFeedbackDefinitions(
 				{
 					id: 'ch',
 					type: 'number',
-					label: 'Channel Slot (1–8)',
+					label: 'Channel Slot (1–16)',
 					default: 1,
 					min: 1,
-					max: 8,
+					max: 16,
 				},
 			],
 			defaultStyle: {

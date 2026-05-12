@@ -83,11 +83,11 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 		steps: [{ down: [{ actionId: 'back_to_productions', options: {} }], up: [] }],
 	}
 
-	// ── PGM indicators (1–8) ─────────────────────────────────────────────────
-	for (let i = 1; i <= 8; i++) {
+	// ── PGM indicators (1–16) ────────────────────────────────────────────────
+	for (let i = 1; i <= 16; i++) {
 		presets[`pgm_indicator_${i}`] = {
 			type: 'button',
-			category: '3. Program (PGM)',
+			category: '3. Video - Program (PGM)',
 			name: `PGM Indicator — Source ${i}`,
 			style: { text: `Source ${i}`, size: '14', color: C.grey, bgcolor: C.dark },
 			feedbacks: [
@@ -97,11 +97,11 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 		}
 	}
 
-	// ── PVW selectors (1–8) ──────────────────────────────────────────────────
-	for (let i = 1; i <= 8; i++) {
+	// ── PVW selectors (1–16) ─────────────────────────────────────────────────
+	for (let i = 1; i <= 16; i++) {
 		presets[`pvw_selector_${i}`] = {
 			type: 'button',
-			category: '4. Preview (PVW)',
+			category: '4. Video - Preview (PVW)',
 			name: `PVW Selector — Source ${i}`,
 			style: { text: `Source ${i}`, size: '14', color: C.white, bgcolor: C.dark },
 			feedbacks: [
@@ -112,39 +112,45 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 		}
 	}
 
-	// ── Transitions (including Fade to Black) ─────────────────────────────────
-	const autoVariants: Array<{ key: string; label: string; type: string; ms: number }> = [
-		{ key: 'auto_mix_500ms', label: 'AUTO\nMIX 0.5s', type: 'mix', ms: 500 },
-		{ key: 'auto_mix_1s',    label: 'AUTO\nMIX 1s',   type: 'mix', ms: 1000 },
-		{ key: 'auto_mix_2s',    label: 'AUTO\nMIX 2s',   type: 'mix', ms: 2000 },
-		{ key: 'auto_mix_3s',    label: 'AUTO\nMIX 3s',   type: 'mix', ms: 3000 },
-		{ key: 'auto_dip_1s',    label: 'AUTO\nDIP 1s',   type: 'dip', ms: 1000 },
-		{ key: 'auto_push_1s',   label: 'AUTO\nPUSH 1s',  type: 'push', ms: 1000 },
-	]
-
-	for (const v of autoVariants) {
-		presets[v.key] = {
-			type: 'button',
-			category: '5. Transitions',
-			name: v.label.replace('\n', ' '),
-			style: { text: v.label, size: '14', color: C.black, bgcolor: C.white },
-			feedbacks: [],
-			steps: [{ down: [{ actionId: 'auto', options: { transitionType: v.type, durationMs: v.ms } }], up: [] }],
-		}
-	}
-
+	// ── Transitions ──────────────────────────────────────────────────────────
 	presets['take'] = {
 		type: 'button',
-		category: '5. Transitions',
-		name: 'CUT (PVW → PGM)',
-		style: { text: 'CUT', size: '18', color: C.black, bgcolor: C.white },
+		category: '5. Video - Transitions',
+		name: 'TAKE (PVW → PGM)',
+		style: { text: 'TAKE', size: '18', color: C.black, bgcolor: C.white },
 		feedbacks: [],
 		steps: [{ down: [{ actionId: 'take', options: {} }], up: [] }],
 	}
 
+	const transitionVariants: Array<{ type: string; label: string }> = [
+		{ type: 'fade',        label: 'FADE'     },
+		{ type: 'slide_left',  label: 'PUSH L'   },
+		{ type: 'slide_right', label: 'PUSH R'   },
+		{ type: 'slide_up',    label: 'PUSH UP'  },
+		{ type: 'slide_down',  label: 'PUSH DN'  },
+	]
+	const transitionDurations: Array<{ ms: number; suffix: string }> = [
+		{ ms: 500,  suffix: '0.5s' },
+		{ ms: 1000, suffix: '1s'   },
+		{ ms: 2000, suffix: '2s'   },
+	]
+
+	for (const t of transitionVariants) {
+		for (const d of transitionDurations) {
+			presets[`auto_${t.type}_${d.ms}`] = {
+				type: 'button',
+				category: '5. Video - Transitions',
+				name: `${t.label} ${d.suffix}`,
+				style: { text: `${t.label}\n${d.suffix}`, size: '14', color: C.black, bgcolor: C.white },
+				feedbacks: [],
+				steps: [{ down: [{ actionId: 'auto', options: { transitionType: t.type, durationMs: d.ms } }], up: [] }],
+			}
+		}
+	}
+
 	presets['ftb_toggle'] = {
 		type: 'button',
-		category: '6. FTB',
+		category: '5. Video - Transitions',
 		name: 'FTB Toggle',
 		style: { text: 'FTB', size: '18', color: C.white, bgcolor: C.dark },
 		feedbacks: [{ feedbackId: 'ftb_active', options: {}, style: { bgcolor: C.red, color: C.white } }],
@@ -153,7 +159,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 
 	presets['ftb_on'] = {
 		type: 'button',
-		category: '6. FTB',
+		category: '5. Video - Transitions',
 		name: 'FTB On',
 		style: { text: 'FTB\nON', size: '18', color: C.white, bgcolor: C.darkRed },
 		feedbacks: [{ feedbackId: 'ftb_active', options: {}, style: { bgcolor: C.red, color: C.white } }],
@@ -162,7 +168,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 
 	presets['ftb_off'] = {
 		type: 'button',
-		category: '6. FTB',
+		category: '5. Video - Transitions',
 		name: 'FTB Off',
 		style: { text: 'FTB\nOFF', size: '18', color: C.white, bgcolor: C.dark },
 		feedbacks: [],
@@ -173,7 +179,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 	for (let layer = 0; layer < 4; layer++) {
 		presets[`dsk_${layer + 1}_toggle`] = {
 			type: 'button',
-			category: '7. DSK',
+			category: '6. Video - DSK',
 			name: `DSK ${layer + 1} Toggle`,
 			style: { text: `DSK ${layer + 1}`, size: '18', color: C.grey, bgcolor: C.dark },
 			feedbacks: [
@@ -188,7 +194,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 	for (const pct of [0, 25, 50, 75, 100]) {
 		presets[`ovl_${pct}`] = {
 			type: 'button',
-			category: '8. OVL Alpha',
+			category: '7. Video - OVL Alpha',
 			name: `OVL ${pct}%`,
 			style: { text: `OVL\n${pct}%`, size: '14', color: C.white, bgcolor: C.slate },
 			feedbacks: [],
@@ -200,7 +206,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 	for (const gfx of graphics) {
 		presets[`gfx_${gfx.id}_on`] = {
 			type: 'button',
-			category: '9. Graphics',
+			category: '10. Graphics',
 			name: `${gfx.name} On`,
 			style: { text: `${gfx.name}\nON`, size: '14', color: C.white, bgcolor: C.dark },
 			feedbacks: [
@@ -211,7 +217,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 
 		presets[`gfx_${gfx.id}_off`] = {
 			type: 'button',
-			category: '9. Graphics',
+			category: '10. Graphics',
 			name: `${gfx.name} Off`,
 			style: { text: `${gfx.name}\nOFF`, size: '14', color: C.white, bgcolor: C.dark },
 			feedbacks: [],
@@ -225,12 +231,120 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 		if (!macro) continue
 		presets[`macro_${i + 1}`] = {
 			type: 'button',
-			category: '10. Macros',
+			category: '11. Macros',
 			name: `Macro: ${macro.label}`,
 			style: { text: macro.label, size: '14', color: C.white, bgcolor: C.navy },
 			feedbacks: [],
 			steps: [{ down: [{ actionId: 'macro_exec', options: { macroId: macro.id } }], up: [] }],
 		}
+	}
+
+	// ── Audio — Channels (sorted by channel: mute → vol up → vol down → fader) ─
+	const audioChannels: Array<{ id: string; label: string }> = [
+		{ id: 'main', label: 'MAIN' },
+		...Array.from({ length: 16 }, (_, i) => ({ id: `ch${i + 1}`, label: `Ch ${i + 1}` })),
+	]
+	for (const ch of audioChannels) {
+		presets[`audio_mute_${ch.id}`] = {
+			type: 'button',
+			category: '8. Audio - Channels',
+			name: `${ch.label} Mute`,
+			style: { text: `${ch.label}\nMUTE`, size: '14', color: C.white, bgcolor: C.dark },
+			feedbacks: [
+				{ feedbackId: 'audio_ch_inactive', options: { elementId: ch.id }, style: { color: C.grey } },
+				{ feedbackId: 'audio_muted',       options: { elementId: ch.id }, style: { bgcolor: C.orange, color: C.white } },
+			],
+			steps: [{ down: [{ actionId: 'audio_mute_toggle', options: { elementId: ch.id } }], up: [] }],
+		}
+		for (const dir of ['up', 'down'] as const) {
+			presets[`audio_vol_${ch.id}_${dir}`] = {
+				type: 'button',
+				category: '8. Audio - Channels',
+				name: `${ch.label} Volume ${dir === 'up' ? 'Up' : 'Down'}`,
+				style: { text: `${ch.label}\n${dir === 'up' ? '▲' : '▼'}`, size: '14', color: C.white, bgcolor: C.dark },
+				feedbacks: [
+					{ feedbackId: 'audio_ch_inactive', options: { elementId: ch.id }, style: { color: C.grey } },
+				],
+				steps: [{ down: [{ actionId: 'audio_volume_nudge', options: { elementId: ch.id, direction: dir, step: 5 } }], up: [] }],
+			}
+		}
+		presets[`audio_fader_${ch.id}`] = {
+			type: 'button',
+			category: '8. Audio - Channels',
+			name: `${ch.label} Fader`,
+			style: { text: `${ch.label}\nFADER`, size: '14', color: C.white, bgcolor: C.slate },
+			feedbacks: [
+				{ feedbackId: 'audio_ch_inactive', options: { elementId: ch.id }, style: { color: C.grey } },
+				{ feedbackId: 'audio_muted',       options: { elementId: ch.id }, style: { bgcolor: C.orange, color: C.white } },
+			],
+			steps: [{
+				down:         [{ actionId: 'audio_mute_toggle',  options: { elementId: ch.id } }],
+				up:           [],
+				rotate_left:  [{ actionId: 'audio_volume_nudge', options: { elementId: ch.id, direction: 'down', step: 5 } }],
+				rotate_right: [{ actionId: 'audio_volume_nudge', options: { elementId: ch.id, direction: 'up',   step: 5 } }],
+			}],
+		}
+	}
+
+	// ── Audio — X Buttons (selected channel) ────────────────────────────────
+	const xChannels: Array<{ id: string; label: string }> = [
+		{ id: 'main', label: 'MAIN' },
+		...Array.from({ length: 16 }, (_, i) => ({ id: `ch${i + 1}`, label: `Ch ${i + 1}` })),
+	]
+	for (const ch of xChannels) {
+		presets[`audio_select_${ch.id}`] = {
+			type: 'button',
+			category: '9. Audio - X Buttons',
+			name: `Select ${ch.label}`,
+			style: { text: ch.label, size: '14', color: C.white, bgcolor: C.dark },
+			feedbacks: [
+				{ feedbackId: 'audio_ch_inactive', options: { elementId: ch.id }, style: { color: C.grey } },
+				{ feedbackId: 'audio_ch_selected', options: { elementId: ch.id }, style: { bgcolor: C.orange, color: C.white } },
+			],
+			steps: [{ down: [{ actionId: 'audio_set_selected', options: { elementId: ch.id } }], up: [] }],
+		}
+	}
+	presets['audio_mute_x'] = {
+		type: 'button',
+		category: '9. Audio - X Buttons',
+		name: 'Mute X',
+		style: { text: 'MUTE\nX', size: '14', color: C.white, bgcolor: C.dark },
+		feedbacks: [
+			{ feedbackId: 'audio_muted_x', options: {}, style: { bgcolor: C.orange, color: C.white } },
+		],
+		steps: [{ down: [{ actionId: 'audio_mute_x', options: {} }], up: [] }],
+	}
+	// X rotary fader — rotate to nudge X channel, press to mute X
+	presets['audio_fader_x'] = {
+		type: 'button',
+		category: '9. Audio - X Buttons',
+		name: 'X Fader',
+		style: { text: 'X\nFADER', size: '14', color: C.white, bgcolor: C.slate },
+		feedbacks: [
+			{ feedbackId: 'audio_muted_x', options: {}, style: { bgcolor: C.orange, color: C.white } },
+		],
+		steps: [{
+			down:         [{ actionId: 'audio_mute_x',   options: {} }],
+			up:           [],
+			rotate_left:  [{ actionId: 'audio_nudge_x',  options: { direction: 'down', step: 5 } }],
+			rotate_right: [{ actionId: 'audio_nudge_x',  options: { direction: 'up',   step: 5 } }],
+		}],
+	}
+	presets['audio_nudge_x_up'] = {
+		type: 'button',
+		category: '9. Audio - X Buttons',
+		name: 'Volume Up X',
+		style: { text: 'VOL ▲\nX', size: '14', color: C.white, bgcolor: C.dark },
+		feedbacks: [],
+		steps: [{ down: [{ actionId: 'audio_nudge_x', options: { direction: 'up', step: 5 } }], up: [] }],
+	}
+	presets['audio_nudge_x_down'] = {
+		type: 'button',
+		category: '9. Audio - X Buttons',
+		name: 'Volume Down X',
+		style: { text: 'VOL ▼\nX', size: '14', color: C.white, bgcolor: C.dark },
+		feedbacks: [],
+		steps: [{ down: [{ actionId: 'audio_nudge_x', options: { direction: 'down', step: 5 } }], up: [] }],
 	}
 
 	return presets

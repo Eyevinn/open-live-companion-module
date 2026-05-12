@@ -17,10 +17,10 @@ export interface ActionCallbacks {
 const sourceIndexOption = {
 	id: 'sourceIndex',
 	type: 'number' as const,
-	label: 'Source Slot (1–8)',
+	label: 'Source Slot (1–16)',
 	default: 1,
 	min: 1,
-	max: 8,
+	max: 16,
 }
 
 export function getActionDefinitions(
@@ -46,9 +46,11 @@ export function getActionDefinitions(
 	}
 
 	const transitionTypeChoices = [
-		{ id: 'mix', label: 'Mix' },
-		{ id: 'dip', label: 'Dip' },
-		{ id: 'push', label: 'Push' },
+		{ id: 'fade',        label: 'Fade'       },
+		{ id: 'slide_left',  label: 'Push Left'  },
+		{ id: 'slide_right', label: 'Push Right' },
+		{ id: 'slide_up',    label: 'Push Up'    },
+		{ id: 'slide_down',  label: 'Push Down'  },
 	]
 
 	const ftbModeChoices = [
@@ -165,7 +167,7 @@ export function getActionDefinitions(
 					type: 'dropdown',
 					label: 'Transition Type',
 					choices: transitionTypeChoices,
-					default: 'mix',
+					default: 'fade',
 				},
 				{
 					id: 'durationMs',
@@ -183,7 +185,7 @@ export function getActionDefinitions(
 				send({
 					type: 'TRANSITION',
 					mixerInput,
-					transitionType: String(action.options['transitionType'] ?? 'mix'),
+					transitionType: String(action.options['transitionType'] ?? 'fade'),
 					durationMs: Number(action.options['durationMs'] ?? 1000),
 				})
 			},
@@ -198,7 +200,7 @@ export function getActionDefinitions(
 					type: 'dropdown',
 					label: 'Transition Type',
 					choices: transitionTypeChoices,
-					default: 'mix',
+					default: 'fade',
 				},
 				{
 					id: 'durationMs',
@@ -215,7 +217,7 @@ export function getActionDefinitions(
 				send({
 					type: 'TRANSITION',
 					mixerInput: pvw,
-					transitionType: String(action.options['transitionType'] ?? 'mix'),
+					transitionType: String(action.options['transitionType'] ?? 'fade'),
 					durationMs: Number(action.options['durationMs'] ?? 1000),
 				})
 				// Transitioning out of FTB — deactivate it so the button goes dark
