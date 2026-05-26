@@ -60,6 +60,10 @@ export interface ModuleState {
 	audioChannels: Record<string, { volume: number; muted: boolean }>
 	audioChannelCount: number
 	selectedAudioCh: string
+	pgmPip: number | null // 0-based PiP index on PGM, null if no PiP on PGM
+	pvwPip: number | null // 0-based PiP index on PVW, null if no PiP on PVW
+	pipCount: number       // number of PiPs configured on the production
+	productionPeerCounts: Record<string, number> // productionId → connected controller count
 }
 
 const POLL_INTERVAL_MS = 10_000
@@ -68,6 +72,7 @@ const RETRY_SETUP_MS = 15_000
 class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	private wsClient: WsClient | null = null
 	private selectedProduction: ProductionDoc | null = null
+	private baseSources: ProductionSource[] = []  // real sources, no PiP virtuals
 	private audioSources: ProductionSource[] = []
 	private pendingSlot: number | null = null
 	private config: ModuleConfig = { apiUrl: 'http://localhost:8080' }
@@ -87,6 +92,10 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		audioChannels: {},
 		audioChannelCount: 0,
 		selectedAudioCh: '',
+		pgmPip: null,
+		pvwPip: null,
+		pipCount: 0,
+		productionPeerCounts: {},
 	}
 
 	// -----------------------------------------------------------------------
@@ -166,6 +175,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			this.log('debug', `Fetched ${all.length} production(s): ${JSON.stringify(all.map(p => ({ id: p._id, name: p.name, status: p.status })))}`)
 			this.state.productions = all.filter((p) => p.status === 'active')
 			this.log('info', `Found ${this.state.productions.length} active production(s) out of ${all.length} total`)
+			void this._pollPeerCounts()
 			this.updateStatus(InstanceStatus.Ok)
 			this._cancelRetry()
 		} catch (err) {
@@ -235,6 +245,10 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		this.selectedProduction = production
 		this.state.selectedProductionId = productionId
 		this._resetControlState()
+		// Set baseSources AFTER _resetControlState so it isn't cleared by the reset.
+		// baseSources holds the real (non-PiP) sources; PIP_STATE appends virtual PiP
+		// slots on top of this when the production has PiPs configured.
+		this.baseSources = [...production.sources]
 		this.audioSources = audioSources
 
 		// Seed dskLayers from graphicAssignments so only currently-configured DSK
@@ -261,6 +275,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			this.log('debug', `Refresh: fetched ${all.length} production(s): ${JSON.stringify(all.map(p => ({ id: p._id, name: p.name, status: p.status })))}`)
 			this.state.productions = all.filter((p) => p.status === 'active')
 			this.log('info', `Refreshed — ${this.state.productions.length} active production(s) out of ${all.length} total`)
+			void this._pollPeerCounts()
 		} catch (err) {
 			this.log('warn', `Failed to refresh productions: ${this._extractErrorMessage(err)}`)
 		}
@@ -341,7 +356,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			...emptySourceVars(),
 			...productionSlotVarsFromList(this.state.productions),
 		})
-		this.checkFeedbacks('production_slot_occupied', 'audio_ch_inactive')
+		this.checkFeedbacks('production_slot_occupied', 'production_slot_has_peers', 'audio_ch_inactive')
 	}
 
 	private _registerControlMode(): void {
@@ -419,9 +434,17 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		switch (msg.type) {
 			case 'TALLY': {
 				this.log('info', `TALLY received — pgm: ${msg.pgm ?? 'null'}, pvw: ${msg.pvw ?? 'null'}`)
-				this.state.pgm = msg.pgm
-				this.state.pvw = msg.pvw
-				this.setVariableValues({ pgm_source: msg.pgm ?? '', pvw_source: msg.pvw ?? '' })
+				// When TALLY says null it could mean a PiP is now on PGM/PVW (the backend
+				// sends pgm: null when program_input is null, i.e. a PiP took over).
+				// Guard: don't clear a pip-based pgm/pvw unless a real source is taking over.
+				if (msg.pgm !== null || this.state.pgmPip === null) {
+					this.state.pgm = msg.pgm
+					this.setVariableValues({ pgm_source: msg.pgm ?? '' })
+				}
+				if (msg.pvw !== null || this.state.pvwPip === null) {
+					this.state.pvw = msg.pvw
+					this.setVariableValues({ pvw_source: msg.pvw ?? '' })
+				}
 				this.checkFeedbacks('pgm_tally', 'pvw_tally')
 				break
 			}
@@ -469,6 +492,49 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 				}
 				break
 			}
+			case 'PIP_STATE': {
+				this.log('debug', `PIP_STATE received — pgmPip: ${msg.pgmPip ?? 'null'}, pvwPip: ${msg.pvwPip ?? 'null'}, pips: ${msg.pips.length}`)
+				const oldPipCount = this.state.pipCount
+				this.state.pgmPip = msg.pgmPip
+				this.state.pvwPip = msg.pvwPip
+				this.state.pipCount = msg.pips.length
+
+				// Synthesise unified pgm/pvw so existing tally feedbacks light for PiP slots.
+				// PiP virtual sources use mixerInput "pip:N" (0-based).
+				if (msg.pgmPip !== null) {
+					this.state.pgm = `pip:${msg.pgmPip}`
+					this.setVariableValues({ pgm_source: `pip:${msg.pgmPip}` })
+				} else if (this.state.pgm?.startsWith('pip:')) {
+					this.state.pgm = null
+					this.setVariableValues({ pgm_source: '' })
+				}
+				if (msg.pvwPip !== null) {
+					this.state.pvw = `pip:${msg.pvwPip}`
+					this.setVariableValues({ pvw_source: `pip:${msg.pvwPip}` })
+				} else if (this.state.pvw?.startsWith('pip:')) {
+					this.state.pvw = null
+					this.setVariableValues({ pvw_source: '' })
+				}
+
+				// Rebuild production.sources with virtual PiP slots when count changes.
+				// This makes the existing PGM/PVW source-slot presets cover PiPs automatically.
+				if (oldPipCount !== msg.pips.length && this.selectedProduction) {
+					this.selectedProduction.sources = [
+						...this.baseSources,
+						...Array.from({ length: msg.pips.length }, (_, i) => ({
+							id: `pip:${i}`,
+							name: `PiP ${i + 1}`,
+							type: 'pip',
+							mixerInput: `pip:${i}`,
+						})),
+					]
+					this._registerControlMode()
+					return // _registerControlMode fires checkFeedbacks
+				}
+
+				this.checkFeedbacks('pgm_tally', 'pvw_tally')
+				break
+			}
 			case 'MACRO_EXECUTED': {
 				this.log('debug', `Macro executed: ${msg.macroId}`)
 				break
@@ -508,6 +574,44 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			clearInterval(this.pollTimer)
 			this.pollTimer = null
 		}
+	}
+
+	// -----------------------------------------------------------------------
+	// Peer-count fetch — called once after productions are loaded/refreshed
+	// -----------------------------------------------------------------------
+
+	private async _pollPeerCounts(): Promise<void> {
+		const prods = this.state.productions
+		if (prods.length === 0) return
+		const results = await Promise.allSettled(
+			prods.map(async (p) => {
+				const url = `${this._normaliseUrl(this.config.apiUrl)}/api/v1/productions/${encodeURIComponent(p._id)}/controllers`
+				const ctrl = new AbortController()
+				const timeout = setTimeout(() => ctrl.abort(), 3000)
+				try {
+					const res = await fetch(url, {
+						headers: { Accept: 'application/json', ...await this._authHeaders() },
+						signal: ctrl.signal,
+					})
+					if (!res.ok) return { id: p._id, count: 0 }
+					const data = await res.json() as { count: number }
+					return { id: p._id, count: data.count }
+				} finally {
+					clearTimeout(timeout)
+				}
+			}),
+		)
+		let changed = false
+		for (const r of results) {
+			if (r.status === 'fulfilled') {
+				const { id, count } = r.value
+				if (this.state.productionPeerCounts[id] !== count) {
+					this.state.productionPeerCounts[id] = count
+					changed = true
+				}
+			}
+		}
+		if (changed) this.checkFeedbacks('production_slot_has_peers')
 	}
 
 	private async _checkProductionActive(): Promise<void> {
@@ -647,7 +751,11 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		this.state.audioChannels = {}
 		this.state.audioChannelCount = 0
 		this.state.selectedAudioCh = ''
+		this.state.pgmPip = null
+		this.state.pvwPip = null
+		this.state.pipCount = 0
 		this.audioSources = []
+		this.baseSources = []
 		this.pendingSlot = null
 	}
 }

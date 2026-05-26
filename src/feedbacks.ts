@@ -131,6 +131,33 @@ export function getFeedbackDefinitions(
 			},
 		},
 
+		production_slot_has_peers: {
+			type: 'boolean',
+			name: 'Production Slot Has Peers',
+			description: 'Active when at least one controller is connected to the production in this slot',
+			options: [
+				{
+					id: 'slot',
+					type: 'number',
+					label: 'Slot (1–31)',
+					default: 1,
+					min: 1,
+					max: 31,
+				},
+			],
+			defaultStyle: {
+				png64: 'iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAXUlEQVR42mP4z8DAQA2MTbAEiE8D8U8oPg0VI9ogJaim/zjwaagaggbhMwTZMLwGlRBhCAyX4DPoNAkGncZn0E8SDPpJF4Oo5jWqBTbVop+qCZJqWYTqmXbUIFQMAH7TsxTXB4CeAAAAAElFTkSuQmCC',
+				pngalignment: 'right:bottom',
+			},
+			callback: (feedback) => {
+				const slot = Number(feedback.options['slot'] ?? 1)
+				const state = getState()
+				const prod = state.productions[slot - 1]
+				if (!prod) return false
+				return (state.productionPeerCounts[prod._id] ?? 0) > 0
+			},
+		},
+
 		dsk_configured: {
 			type: 'boolean',
 			name: 'DSK Configured',

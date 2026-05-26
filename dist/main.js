@@ -9597,7 +9597,12 @@ function getActionDefinitions(getWsClient, production, getState, callbacks) {
         const idx = Number(action.options["sourceIndex"] ?? 1);
         const mixerInput = resolveMixerInput(idx);
         if (!mixerInput) return;
-        send({ type: "CUT", mixerInput });
+        if (mixerInput.startsWith("pip:")) {
+          send({ type: "SELECT_PVW_PIP", pip: parseInt(mixerInput.slice(4), 10) });
+          send({ type: "TAKE" });
+        } else {
+          send({ type: "CUT", mixerInput });
+        }
       }
     },
     set_pvw: {
@@ -9609,7 +9614,11 @@ function getActionDefinitions(getWsClient, production, getState, callbacks) {
         const mixerInput = resolveMixerInput(idx);
         if (!mixerInput) return;
         if (getState().pgm === mixerInput) return;
-        send({ type: "SET_PVW", mixerInput });
+        if (mixerInput.startsWith("pip:")) {
+          send({ type: "SELECT_PVW_PIP", pip: parseInt(mixerInput.slice(4), 10) });
+        } else {
+          send({ type: "SET_PVW", mixerInput });
+        }
       }
     },
     transition: {
@@ -9884,8 +9893,8 @@ function getActionDefinitions(getWsClient, production, getState, callbacks) {
         {
           id: "step",
           type: "number",
-          label: "Step (%)",
-          default: 5,
+          label: "Step (% of current level)",
+          default: 10,
           min: 1,
           max: 25
         }
@@ -9893,20 +9902,19 @@ function getActionDefinitions(getWsClient, production, getState, callbacks) {
       callback: (action) => {
         const elementId = String(action.options["elementId"] ?? "ch1");
         const direction = String(action.options["direction"] ?? "up");
-        const step = Number(action.options["step"] ?? 5) / 100;
+        const ratio = 1 + Number(action.options["step"] ?? 5) / 100;
         const ch = getState().audioChannels[elementId];
-        const current = ch?.volume ?? 1;
-        const raw = direction === "up" ? current + step : current - step;
+        const current = Math.max(1e-4, ch?.volume ?? 1);
+        const raw = direction === "up" ? current * ratio : current / ratio;
         const atFloor = raw <= 1e-4;
-        const wasAtFloor = current <= 1e-4;
-        const volume = Math.max(1e-4, Math.min(0.9999, raw));
+        const wasAtFloor = (ch?.volume ?? 1) <= 1e-4;
+        const volume = Math.max(1e-4, Math.min(10, raw));
         if (atFloor) {
           if (!wasAtFloor) send({ type: "AUDIO_SET", elementId, property: "volume", value: 1e-4 });
           if (!ch?.muted) send({ type: "AUDIO_SET", elementId, property: "mute", value: true });
           return;
         }
         if (ch?.muted) send({ type: "AUDIO_SET", elementId, property: "mute", value: false });
-        if (volume === current) return;
         send({ type: "AUDIO_SET", elementId, property: "volume", value: volume });
       }
     },
@@ -9957,8 +9965,8 @@ function getActionDefinitions(getWsClient, production, getState, callbacks) {
         {
           id: "step",
           type: "number",
-          label: "Step (%)",
-          default: 5,
+          label: "Step (% of current level)",
+          default: 10,
           min: 1,
           max: 25
         }
@@ -9967,20 +9975,19 @@ function getActionDefinitions(getWsClient, production, getState, callbacks) {
         const elementId = getState().selectedAudioCh;
         if (!elementId) return;
         const direction = String(action.options["direction"] ?? "up");
-        const step = Number(action.options["step"] ?? 5) / 100;
+        const ratio = 1 + Number(action.options["step"] ?? 5) / 100;
         const ch = getState().audioChannels[elementId];
-        const current = ch?.volume ?? 1;
-        const raw = direction === "up" ? current + step : current - step;
+        const current = Math.max(1e-4, ch?.volume ?? 1);
+        const raw = direction === "up" ? current * ratio : current / ratio;
         const atFloor = raw <= 1e-4;
-        const wasAtFloor = current <= 1e-4;
-        const volume = Math.max(1e-4, Math.min(0.9999, raw));
+        const wasAtFloor = (ch?.volume ?? 1) <= 1e-4;
+        const volume = Math.max(1e-4, Math.min(10, raw));
         if (atFloor) {
           if (!wasAtFloor) send({ type: "AUDIO_SET", elementId, property: "volume", value: 1e-4 });
           if (!ch?.muted) send({ type: "AUDIO_SET", elementId, property: "mute", value: true });
           return;
         }
         if (ch?.muted) send({ type: "AUDIO_SET", elementId, property: "mute", value: false });
-        if (volume === current) return;
         send({ type: "AUDIO_SET", elementId, property: "volume", value: volume });
       }
     },
@@ -10118,6 +10125,32 @@ function getFeedbackDefinitions(getState, production) {
       callback: (feedback) => {
         const slot = Number(feedback.options["slot"] ?? 1);
         return getState().productions[slot - 1] != null;
+      }
+    },
+    production_slot_has_peers: {
+      type: "boolean",
+      name: "Production Slot Has Peers",
+      description: "Active when at least one controller is connected to the production in this slot",
+      options: [
+        {
+          id: "slot",
+          type: "number",
+          label: "Slot (1\u201331)",
+          default: 1,
+          min: 1,
+          max: 31
+        }
+      ],
+      defaultStyle: {
+        png64: "iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAXUlEQVR42mP4z8DAQA2MTbAEiE8D8U8oPg0VI9ogJaim/zjwaagaggbhMwTZMLwGlRBhCAyX4DPoNAkGncZn0E8SDPpJF4Oo5jWqBTbVop+qCZJqWYTqmXbUIFQMAH7TsxTXB4CeAAAAAElFTkSuQmCC",
+        pngalignment: "right:bottom"
+      },
+      callback: (feedback) => {
+        const slot = Number(feedback.options["slot"] ?? 1);
+        const state = getState();
+        const prod = state.productions[slot - 1];
+        if (!prod) return false;
+        return (state.productionPeerCounts[prod._id] ?? 0) > 0;
       }
     },
     dsk_configured: {
@@ -10266,7 +10299,19 @@ var C = {
   blue: (0, import_base2.combineRgb)(0, 80, 180),
   green: (0, import_base2.combineRgb)(0, 150, 0),
   brightGreen: (0, import_base2.combineRgb)(0, 200, 0),
-  red: (0, import_base2.combineRgb)(255, 0, 0)
+  red: (0, import_base2.combineRgb)(255, 0, 0),
+  darkGrey: (0, import_base2.combineRgb)(60, 60, 60),
+  // Category background colours
+  catNav: (0, import_base2.combineRgb)(0, 30, 80),
+  // navigation buttons
+  catSources: (0, import_base2.combineRgb)(45, 45, 45),
+  catTransitions: (0, import_base2.combineRgb)(80, 48, 0),
+  catDsk: (0, import_base2.combineRgb)(55, 0, 100),
+  catOvl: (0, import_base2.combineRgb)(0, 70, 90),
+  catAudioCh: (0, import_base2.combineRgb)(0, 75, 40),
+  // audio channel select
+  catAudioCtrl: (0, import_base2.combineRgb)(0, 55, 65)
+  // audio mute / vol / fader
 };
 function getLandingPresets(_productions) {
   const presets = {};
@@ -10274,7 +10319,7 @@ function getLandingPresets(_productions) {
     type: "button",
     category: "2. Productions",
     name: "Refresh Productions",
-    style: { text: "REFRESH", size: "14", color: C.white, bgcolor: C.darkBlue },
+    style: { text: "REFRESH", size: "14", color: C.white, bgcolor: C.catNav, show_topbar: false },
     feedbacks: [],
     steps: [{ down: [{ actionId: "refresh_productions", options: {} }], up: [] }]
   };
@@ -10288,13 +10333,19 @@ function getLandingPresets(_productions) {
         size: "14",
         color: C.white,
         bgcolor: C.black,
-        alignment: "center:center"
+        alignment: "center:center",
+        show_topbar: false
       },
       feedbacks: [
         {
           feedbackId: "production_slot_occupied",
           options: { slot },
-          style: { bgcolor: C.green, color: C.white }
+          style: { bgcolor: C.darkGrey }
+        },
+        {
+          feedbackId: "production_slot_has_peers",
+          options: { slot },
+          style: { png64: "iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAXUlEQVR42mP4z8DAQA2MTbAEiE8D8U8oPg0VI9ogJaim/zjwaagaggbhMwTZMLwGlRBhCAyX4DPoNAkGncZn0E8SDPpJF4Oo5jWqBTbVop+qCZJqWYTqmXbUIFQMAH7TsxTXB4CeAAAAAElFTkSuQmCC", pngalignment: "right:bottom" }
         }
       ],
       steps: [
@@ -10312,7 +10363,7 @@ function getControlPresets(production) {
     type: "button",
     category: "1. Navigation",
     name: "Back to Productions",
-    style: { text: "\u2190 BACK", size: "18", color: C.white, bgcolor: C.darkBlue },
+    style: { text: "\u2190 BACK", size: "18", color: C.white, bgcolor: C.catNav, show_topbar: false },
     feedbacks: [],
     steps: [{ down: [{ actionId: "back_to_productions", options: {} }], up: [] }]
   };
@@ -10321,7 +10372,7 @@ function getControlPresets(production) {
       type: "button",
       category: "3. Video - Program (PGM)",
       name: `PGM Indicator \u2014 Source ${i}`,
-      style: { text: `Source ${i}`, size: "14", color: C.grey, bgcolor: C.dark },
+      style: { text: `Source ${i}`, size: "14", color: C.grey, bgcolor: C.catSources, show_topbar: false },
       feedbacks: [
         { feedbackId: "pgm_tally", options: { sourceIndex: i }, style: { bgcolor: C.red, color: C.white } }
       ],
@@ -10333,7 +10384,7 @@ function getControlPresets(production) {
       type: "button",
       category: "4. Video - Preview (PVW)",
       name: `PVW Selector \u2014 Source ${i}`,
-      style: { text: `Source ${i}`, size: "14", color: C.white, bgcolor: C.dark },
+      style: { text: `Source ${i}`, size: "14", color: C.white, bgcolor: C.catSources, show_topbar: false },
       feedbacks: [
         { feedbackId: "pgm_tally", options: { sourceIndex: i }, style: { bgcolor: C.dark, color: C.grey } },
         { feedbackId: "pvw_tally", options: { sourceIndex: i }, style: { bgcolor: C.brightGreen, color: C.white } }
@@ -10345,7 +10396,7 @@ function getControlPresets(production) {
     type: "button",
     category: "5. Video - Transitions",
     name: "TAKE (PVW \u2192 PGM)",
-    style: { text: "TAKE", size: "18", color: C.black, bgcolor: C.white },
+    style: { text: "TAKE", size: "18", color: C.white, bgcolor: C.catTransitions, show_topbar: false },
     feedbacks: [],
     steps: [{ down: [{ actionId: "take", options: {} }], up: [] }]
   };
@@ -10368,44 +10419,37 @@ function getControlPresets(production) {
         category: "5. Video - Transitions",
         name: `${t.label} ${d.suffix}`,
         style: { text: `${t.label}
-${d.suffix}`, size: "14", color: C.black, bgcolor: C.white },
+${d.suffix}`, size: "14", color: C.white, bgcolor: C.catTransitions, show_topbar: false },
         feedbacks: [],
         steps: [{ down: [{ actionId: "auto", options: { transitionType: t.type, durationMs: d.ms } }], up: [] }]
       };
     }
+    presets[`auto_${t.type}_custom`] = {
+      type: "button",
+      category: "5. Video - Transitions",
+      name: `${t.label} Custom`,
+      style: { text: `${t.label}
+CUSTOM`, size: "14", color: C.black, bgcolor: C.white, show_topbar: false },
+      feedbacks: [],
+      steps: [{ down: [{ actionId: "auto", options: { transitionType: t.type, durationMs: 1e3 } }], up: [] }]
+    };
   }
   presets["ftb_toggle"] = {
     type: "button",
     category: "5. Video - Transitions",
     name: "FTB Toggle",
-    style: { text: "FTB", size: "18", color: C.white, bgcolor: C.dark },
+    style: { text: "FTB", size: "18", color: C.white, bgcolor: C.catTransitions, show_topbar: false },
     feedbacks: [{ feedbackId: "ftb_active", options: {}, style: { bgcolor: C.red, color: C.white } }],
     steps: [{ down: [{ actionId: "ftb", options: { mode: "toggle", durationMs: 1e3 } }], up: [] }]
-  };
-  presets["ftb_on"] = {
-    type: "button",
-    category: "5. Video - Transitions",
-    name: "FTB On",
-    style: { text: "FTB\nON", size: "18", color: C.white, bgcolor: C.darkRed },
-    feedbacks: [{ feedbackId: "ftb_active", options: {}, style: { bgcolor: C.red, color: C.white } }],
-    steps: [{ down: [{ actionId: "ftb", options: { mode: "on", durationMs: 1e3 } }], up: [] }]
-  };
-  presets["ftb_off"] = {
-    type: "button",
-    category: "5. Video - Transitions",
-    name: "FTB Off",
-    style: { text: "FTB\nOFF", size: "18", color: C.white, bgcolor: C.dark },
-    feedbacks: [],
-    steps: [{ down: [{ actionId: "ftb", options: { mode: "off", durationMs: 1e3 } }], up: [] }]
   };
   for (let layer = 0; layer < 4; layer++) {
     presets[`dsk_${layer + 1}_toggle`] = {
       type: "button",
       category: "6. Video - DSK",
       name: `DSK ${layer + 1} Toggle`,
-      style: { text: `DSK ${layer + 1}`, size: "18", color: C.grey, bgcolor: C.dark },
+      style: { text: `DSK ${layer + 1}`, size: "18", color: C.grey, bgcolor: C.catDsk, show_topbar: false },
       feedbacks: [
-        { feedbackId: "dsk_configured", options: { layer }, style: { color: C.white, bgcolor: C.dark } },
+        { feedbackId: "dsk_configured", options: { layer }, style: { color: C.white, bgcolor: C.catDsk } },
         { feedbackId: "dsk_visible", options: { layer }, style: { bgcolor: C.orange, color: C.white } }
       ],
       steps: [{ down: [{ actionId: "dsk_toggle", options: { layer, visible: false, useForceVisible: false } }], up: [] }]
@@ -10417,7 +10461,7 @@ ${d.suffix}`, size: "14", color: C.black, bgcolor: C.white },
       category: "7. Video - OVL Alpha",
       name: `OVL ${pct}%`,
       style: { text: `OVL
-${pct}%`, size: "14", color: C.white, bgcolor: C.slate },
+${pct}%`, size: "14", color: C.white, bgcolor: C.catOvl, show_topbar: false },
       feedbacks: [],
       steps: [{ down: [{ actionId: "set_ovl_alpha", options: { alpha: pct } }], up: [] }]
     };
@@ -10428,7 +10472,7 @@ ${pct}%`, size: "14", color: C.white, bgcolor: C.slate },
       category: "10. Graphics",
       name: `${gfx.name} On`,
       style: { text: `${gfx.name}
-ON`, size: "14", color: C.white, bgcolor: C.dark },
+ON`, size: "14", color: C.white, bgcolor: C.dark, show_topbar: false },
       feedbacks: [
         { feedbackId: "graphic_active", options: { overlayId: gfx.id }, style: { bgcolor: C.yellow, color: C.black } }
       ],
@@ -10439,7 +10483,7 @@ ON`, size: "14", color: C.white, bgcolor: C.dark },
       category: "10. Graphics",
       name: `${gfx.name} Off`,
       style: { text: `${gfx.name}
-OFF`, size: "14", color: C.white, bgcolor: C.dark },
+OFF`, size: "14", color: C.white, bgcolor: C.dark, show_topbar: false },
       feedbacks: [],
       steps: [{ down: [{ actionId: "graphic_off", options: { overlayId: gfx.id } }], up: [] }]
     };
@@ -10451,7 +10495,7 @@ OFF`, size: "14", color: C.white, bgcolor: C.dark },
       type: "button",
       category: "11. Macros",
       name: `Macro: ${macro.label}`,
-      style: { text: macro.label, size: "14", color: C.white, bgcolor: C.navy },
+      style: { text: macro.label, size: "14", color: C.white, bgcolor: C.navy, show_topbar: false },
       feedbacks: [],
       steps: [{ down: [{ actionId: "macro_exec", options: { macroId: macro.id } }], up: [] }]
     };
@@ -10466,7 +10510,7 @@ OFF`, size: "14", color: C.white, bgcolor: C.dark },
       category: "8. Audio - Channels",
       name: `${ch.label} Mute`,
       style: { text: `${ch.label}
-MUTE`, size: "14", color: C.white, bgcolor: C.dark },
+MUTE`, size: "14", color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
       feedbacks: [
         { feedbackId: "audio_ch_inactive", options: { elementId: ch.id }, style: { color: C.grey } },
         { feedbackId: "audio_muted", options: { elementId: ch.id }, style: { bgcolor: C.orange, color: C.white } }
@@ -10479,7 +10523,7 @@ MUTE`, size: "14", color: C.white, bgcolor: C.dark },
         category: "8. Audio - Channels",
         name: `${ch.label} Volume ${dir === "up" ? "Up" : "Down"}`,
         style: { text: `${ch.label}
-${dir === "up" ? "\u25B2" : "\u25BC"}`, size: "14", color: C.white, bgcolor: C.dark },
+${dir === "up" ? "\u25B2" : "\u25BC"}`, size: "14", color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
         feedbacks: [
           { feedbackId: "audio_ch_inactive", options: { elementId: ch.id }, style: { color: C.grey } }
         ],
@@ -10491,7 +10535,7 @@ ${dir === "up" ? "\u25B2" : "\u25BC"}`, size: "14", color: C.white, bgcolor: C.d
       category: "8. Audio - Channels",
       name: `${ch.label} Fader`,
       style: { text: `${ch.label}
-FADER`, size: "14", color: C.white, bgcolor: C.slate },
+FADER`, size: "14", color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
       feedbacks: [
         { feedbackId: "audio_ch_inactive", options: { elementId: ch.id }, style: { color: C.grey } },
         { feedbackId: "audio_muted", options: { elementId: ch.id }, style: { bgcolor: C.orange, color: C.white } }
@@ -10513,7 +10557,7 @@ FADER`, size: "14", color: C.white, bgcolor: C.slate },
       type: "button",
       category: "9. Audio - X Buttons",
       name: `Select ${ch.label}`,
-      style: { text: ch.label, size: "14", color: C.white, bgcolor: C.dark },
+      style: { text: ch.label, size: "14", color: C.white, bgcolor: C.catAudioCh, show_topbar: false },
       feedbacks: [
         { feedbackId: "audio_ch_inactive", options: { elementId: ch.id }, style: { color: C.grey } },
         { feedbackId: "audio_ch_selected", options: { elementId: ch.id }, style: { bgcolor: C.orange, color: C.white } }
@@ -10525,7 +10569,7 @@ FADER`, size: "14", color: C.white, bgcolor: C.slate },
     type: "button",
     category: "9. Audio - X Buttons",
     name: "Mute X",
-    style: { text: "MUTE\nX", size: "14", color: C.white, bgcolor: C.dark },
+    style: { text: "MUTE\nX", size: "14", color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
     feedbacks: [
       { feedbackId: "audio_muted_x", options: {}, style: { bgcolor: C.orange, color: C.white } }
     ],
@@ -10535,7 +10579,7 @@ FADER`, size: "14", color: C.white, bgcolor: C.slate },
     type: "button",
     category: "9. Audio - X Buttons",
     name: "X Fader",
-    style: { text: "X\nFADER", size: "14", color: C.white, bgcolor: C.slate },
+    style: { text: "X\nFADER", size: "14", color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
     feedbacks: [
       { feedbackId: "audio_muted_x", options: {}, style: { bgcolor: C.orange, color: C.white } }
     ],
@@ -10550,7 +10594,7 @@ FADER`, size: "14", color: C.white, bgcolor: C.slate },
     type: "button",
     category: "9. Audio - X Buttons",
     name: "Volume Up X",
-    style: { text: "VOL \u25B2\nX", size: "14", color: C.white, bgcolor: C.dark },
+    style: { text: "VOL \u25B2\nX", size: "14", color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
     feedbacks: [],
     steps: [{ down: [{ actionId: "audio_nudge_x", options: { direction: "up", step: 5 } }], up: [] }]
   };
@@ -10558,7 +10602,7 @@ FADER`, size: "14", color: C.white, bgcolor: C.slate },
     type: "button",
     category: "9. Audio - X Buttons",
     name: "Volume Down X",
-    style: { text: "VOL \u25BC\nX", size: "14", color: C.white, bgcolor: C.dark },
+    style: { text: "VOL \u25BC\nX", size: "14", color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
     feedbacks: [],
     steps: [{ down: [{ actionId: "audio_nudge_x", options: { direction: "down", step: 5 } }], up: [] }]
   };
@@ -10573,6 +10617,8 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
     super(...arguments);
     this.wsClient = null;
     this.selectedProduction = null;
+    this.baseSources = [];
+    // real sources, no PiP virtuals
     this.audioSources = [];
     this.pendingSlot = null;
     this.config = { apiUrl: "http://localhost:8080" };
@@ -10590,7 +10636,11 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
       dskLayers: {},
       audioChannels: {},
       audioChannelCount: 0,
-      selectedAudioCh: ""
+      selectedAudioCh: "",
+      pgmPip: null,
+      pvwPip: null,
+      pipCount: 0,
+      productionPeerCounts: {}
     };
   }
   // -----------------------------------------------------------------------
@@ -10660,6 +10710,7 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
       this.log("debug", `Fetched ${all.length} production(s): ${JSON.stringify(all.map((p) => ({ id: p._id, name: p.name, status: p.status })))}`);
       this.state.productions = all.filter((p) => p.status === "active");
       this.log("info", `Found ${this.state.productions.length} active production(s) out of ${all.length} total`);
+      void this._pollPeerCounts();
       this.updateStatus(import_base3.InstanceStatus.Ok);
       this._cancelRetry();
     } catch (err) {
@@ -10715,6 +10766,7 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
     this.selectedProduction = production;
     this.state.selectedProductionId = productionId;
     this._resetControlState();
+    this.baseSources = [...production.sources];
     this.audioSources = audioSources;
     for (const assignment of production.graphicAssignments ?? []) {
       const m = /dsk_in_(\d+)$/.exec(assignment.dskInput);
@@ -10732,6 +10784,7 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
       this.log("debug", `Refresh: fetched ${all.length} production(s): ${JSON.stringify(all.map((p) => ({ id: p._id, name: p.name, status: p.status })))}`);
       this.state.productions = all.filter((p) => p.status === "active");
       this.log("info", `Refreshed \u2014 ${this.state.productions.length} active production(s) out of ${all.length} total`);
+      void this._pollPeerCounts();
     } catch (err) {
       this.log("warn", `Failed to refresh productions: ${this._extractErrorMessage(err)}`);
     }
@@ -10803,7 +10856,7 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
       ...emptySourceVars(),
       ...productionSlotVarsFromList(this.state.productions)
     });
-    this.checkFeedbacks("production_slot_occupied", "audio_ch_inactive");
+    this.checkFeedbacks("production_slot_occupied", "production_slot_has_peers", "audio_ch_inactive");
   }
   _registerControlMode() {
     this.state.audioChannelCount = this.audioSources.length;
@@ -10868,9 +10921,14 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
     switch (msg.type) {
       case "TALLY": {
         this.log("info", `TALLY received \u2014 pgm: ${msg.pgm ?? "null"}, pvw: ${msg.pvw ?? "null"}`);
-        this.state.pgm = msg.pgm;
-        this.state.pvw = msg.pvw;
-        this.setVariableValues({ pgm_source: msg.pgm ?? "", pvw_source: msg.pvw ?? "" });
+        if (msg.pgm !== null || this.state.pgmPip === null) {
+          this.state.pgm = msg.pgm;
+          this.setVariableValues({ pgm_source: msg.pgm ?? "" });
+        }
+        if (msg.pvw !== null || this.state.pvwPip === null) {
+          this.state.pvw = msg.pvw;
+          this.setVariableValues({ pvw_source: msg.pvw ?? "" });
+        }
         this.checkFeedbacks("pgm_tally", "pvw_tally");
         break;
       }
@@ -10914,6 +10972,42 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
         }
         break;
       }
+      case "PIP_STATE": {
+        this.log("debug", `PIP_STATE received \u2014 pgmPip: ${msg.pgmPip ?? "null"}, pvwPip: ${msg.pvwPip ?? "null"}, pips: ${msg.pips.length}`);
+        const oldPipCount = this.state.pipCount;
+        this.state.pgmPip = msg.pgmPip;
+        this.state.pvwPip = msg.pvwPip;
+        this.state.pipCount = msg.pips.length;
+        if (msg.pgmPip !== null) {
+          this.state.pgm = `pip:${msg.pgmPip}`;
+          this.setVariableValues({ pgm_source: `pip:${msg.pgmPip}` });
+        } else if (this.state.pgm?.startsWith("pip:")) {
+          this.state.pgm = null;
+          this.setVariableValues({ pgm_source: "" });
+        }
+        if (msg.pvwPip !== null) {
+          this.state.pvw = `pip:${msg.pvwPip}`;
+          this.setVariableValues({ pvw_source: `pip:${msg.pvwPip}` });
+        } else if (this.state.pvw?.startsWith("pip:")) {
+          this.state.pvw = null;
+          this.setVariableValues({ pvw_source: "" });
+        }
+        if (oldPipCount !== msg.pips.length && this.selectedProduction) {
+          this.selectedProduction.sources = [
+            ...this.baseSources,
+            ...Array.from({ length: msg.pips.length }, (_, i) => ({
+              id: `pip:${i}`,
+              name: `PiP ${i + 1}`,
+              type: "pip",
+              mixerInput: `pip:${i}`
+            }))
+          ];
+          this._registerControlMode();
+          return;
+        }
+        this.checkFeedbacks("pgm_tally", "pvw_tally");
+        break;
+      }
       case "MACRO_EXECUTED": {
         this.log("debug", `Macro executed: ${msg.macroId}`);
         break;
@@ -10949,6 +11043,42 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
+  }
+  // -----------------------------------------------------------------------
+  // Peer-count fetch — called once after productions are loaded/refreshed
+  // -----------------------------------------------------------------------
+  async _pollPeerCounts() {
+    const prods = this.state.productions;
+    if (prods.length === 0) return;
+    const results = await Promise.allSettled(
+      prods.map(async (p) => {
+        const url = `${this._normaliseUrl(this.config.apiUrl)}/api/v1/productions/${encodeURIComponent(p._id)}/controllers`;
+        const ctrl = new AbortController();
+        const timeout = setTimeout(() => ctrl.abort(), 3e3);
+        try {
+          const res = await fetch(url, {
+            headers: { Accept: "application/json", ...await this._authHeaders() },
+            signal: ctrl.signal
+          });
+          if (!res.ok) return { id: p._id, count: 0 };
+          const data = await res.json();
+          return { id: p._id, count: data.count };
+        } finally {
+          clearTimeout(timeout);
+        }
+      })
+    );
+    let changed = false;
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        const { id, count } = r.value;
+        if (this.state.productionPeerCounts[id] !== count) {
+          this.state.productionPeerCounts[id] = count;
+          changed = true;
+        }
+      }
+    }
+    if (changed) this.checkFeedbacks("production_slot_has_peers");
   }
   async _checkProductionActive() {
     const id = this.state.selectedProductionId;
@@ -11081,7 +11211,11 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
     this.state.audioChannels = {};
     this.state.audioChannelCount = 0;
     this.state.selectedAudioCh = "";
+    this.state.pgmPip = null;
+    this.state.pvwPip = null;
+    this.state.pipCount = 0;
     this.audioSources = [];
+    this.baseSources = [];
     this.pendingSlot = null;
   }
 };

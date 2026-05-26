@@ -18,6 +18,15 @@ const C = {
 	green:       combineRgb(0, 150, 0),
 	brightGreen: combineRgb(0, 200, 0),
 	red:         combineRgb(255, 0, 0),
+	darkGrey:       combineRgb(60, 60, 60),
+	// Category background colours
+	catNav:         combineRgb(0, 30, 80),    // navigation buttons
+	catSources:     combineRgb(45, 45, 45),
+	catTransitions: combineRgb(80, 48, 0),
+	catDsk:         combineRgb(55, 0, 100),
+	catOvl:         combineRgb(0, 70, 90),
+	catAudioCh:     combineRgb(0, 75, 40),    // audio channel select
+	catAudioCtrl:   combineRgb(0, 55, 65),    // audio mute / vol / fader
 }
 
 // -----------------------------------------------------------------------
@@ -30,7 +39,7 @@ export function getLandingPresets(_productions: ProductionDoc[]): CompanionPrese
 		type: 'button',
 		category: '2. Productions',
 		name: 'Refresh Productions',
-		style: { text: 'REFRESH', size: '14', color: C.white, bgcolor: C.darkBlue },
+		style: { text: 'REFRESH', size: '14', color: C.white, bgcolor: C.catNav, show_topbar: false },
 		feedbacks: [],
 		steps: [{ down: [{ actionId: 'refresh_productions', options: {} }], up: [] }],
 	}
@@ -48,12 +57,18 @@ export function getLandingPresets(_productions: ProductionDoc[]): CompanionPrese
 				color: C.white,
 				bgcolor: C.black,
 				alignment: 'center:center',
+				show_topbar: false,
 			},
 			feedbacks: [
 				{
 					feedbackId: 'production_slot_occupied',
 					options: { slot },
-					style: { bgcolor: C.green, color: C.white },
+					style: { bgcolor: C.darkGrey },
+				},
+				{
+					feedbackId: 'production_slot_has_peers',
+					options: { slot },
+					style: { png64: 'iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAXUlEQVR42mP4z8DAQA2MTbAEiE8D8U8oPg0VI9ogJaim/zjwaagaggbhMwTZMLwGlRBhCAyX4DPoNAkGncZn0E8SDPpJF4Oo5jWqBTbVop+qCZJqWYTqmXbUIFQMAH7TsxTXB4CeAAAAAElFTkSuQmCC', pngalignment: 'right:bottom' },
 				},
 			],
 			steps: [
@@ -78,7 +93,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 		type: 'button',
 		category: '1. Navigation',
 		name: 'Back to Productions',
-		style: { text: '← BACK', size: '18', color: C.white, bgcolor: C.darkBlue },
+		style: { text: '← BACK', size: '18', color: C.white, bgcolor: C.catNav, show_topbar: false },
 		feedbacks: [],
 		steps: [{ down: [{ actionId: 'back_to_productions', options: {} }], up: [] }],
 	}
@@ -89,7 +104,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			type: 'button',
 			category: '3. Video - Program (PGM)',
 			name: `PGM Indicator — Source ${i}`,
-			style: { text: `Source ${i}`, size: '14', color: C.grey, bgcolor: C.dark },
+			style: { text: `Source ${i}`, size: '14', color: C.grey, bgcolor: C.catSources, show_topbar: false },
 			feedbacks: [
 				{ feedbackId: 'pgm_tally', options: { sourceIndex: i }, style: { bgcolor: C.red, color: C.white } },
 			],
@@ -103,7 +118,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			type: 'button',
 			category: '4. Video - Preview (PVW)',
 			name: `PVW Selector — Source ${i}`,
-			style: { text: `Source ${i}`, size: '14', color: C.white, bgcolor: C.dark },
+			style: { text: `Source ${i}`, size: '14', color: C.white, bgcolor: C.catSources, show_topbar: false },
 			feedbacks: [
 				{ feedbackId: 'pgm_tally', options: { sourceIndex: i }, style: { bgcolor: C.dark, color: C.grey } },
 				{ feedbackId: 'pvw_tally', options: { sourceIndex: i }, style: { bgcolor: C.brightGreen, color: C.white } },
@@ -117,7 +132,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 		type: 'button',
 		category: '5. Video - Transitions',
 		name: 'TAKE (PVW → PGM)',
-		style: { text: 'TAKE', size: '18', color: C.black, bgcolor: C.white },
+		style: { text: 'TAKE', size: '18', color: C.white, bgcolor: C.catTransitions, show_topbar: false },
 		feedbacks: [],
 		steps: [{ down: [{ actionId: 'take', options: {} }], up: [] }],
 	}
@@ -141,10 +156,18 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 				type: 'button',
 				category: '5. Video - Transitions',
 				name: `${t.label} ${d.suffix}`,
-				style: { text: `${t.label}\n${d.suffix}`, size: '14', color: C.black, bgcolor: C.white },
+				style: { text: `${t.label}\n${d.suffix}`, size: '14', color: C.white, bgcolor: C.catTransitions, show_topbar: false },
 				feedbacks: [],
 				steps: [{ down: [{ actionId: 'auto', options: { transitionType: t.type, durationMs: d.ms } }], up: [] }],
 			}
+		}
+		presets[`auto_${t.type}_custom`] = {
+			type: 'button',
+			category: '5. Video - Transitions',
+			name: `${t.label} Custom`,
+			style: { text: `${t.label}\nCUSTOM`, size: '14', color: C.black, bgcolor: C.white, show_topbar: false },
+			feedbacks: [],
+			steps: [{ down: [{ actionId: 'auto', options: { transitionType: t.type, durationMs: 1000 } }], up: [] }],
 		}
 	}
 
@@ -152,28 +175,11 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 		type: 'button',
 		category: '5. Video - Transitions',
 		name: 'FTB Toggle',
-		style: { text: 'FTB', size: '18', color: C.white, bgcolor: C.dark },
+		style: { text: 'FTB', size: '18', color: C.white, bgcolor: C.catTransitions, show_topbar: false },
 		feedbacks: [{ feedbackId: 'ftb_active', options: {}, style: { bgcolor: C.red, color: C.white } }],
 		steps: [{ down: [{ actionId: 'ftb', options: { mode: 'toggle', durationMs: 1000 } }], up: [] }],
 	}
 
-	presets['ftb_on'] = {
-		type: 'button',
-		category: '5. Video - Transitions',
-		name: 'FTB On',
-		style: { text: 'FTB\nON', size: '18', color: C.white, bgcolor: C.darkRed },
-		feedbacks: [{ feedbackId: 'ftb_active', options: {}, style: { bgcolor: C.red, color: C.white } }],
-		steps: [{ down: [{ actionId: 'ftb', options: { mode: 'on', durationMs: 1000 } }], up: [] }],
-	}
-
-	presets['ftb_off'] = {
-		type: 'button',
-		category: '5. Video - Transitions',
-		name: 'FTB Off',
-		style: { text: 'FTB\nOFF', size: '18', color: C.white, bgcolor: C.dark },
-		feedbacks: [],
-		steps: [{ down: [{ actionId: 'ftb', options: { mode: 'off', durationMs: 1000 } }], up: [] }],
-	}
 
 	// ── DSK ──────────────────────────────────────────────────────────────────
 	for (let layer = 0; layer < 4; layer++) {
@@ -181,9 +187,9 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			type: 'button',
 			category: '6. Video - DSK',
 			name: `DSK ${layer + 1} Toggle`,
-			style: { text: `DSK ${layer + 1}`, size: '18', color: C.grey, bgcolor: C.dark },
+			style: { text: `DSK ${layer + 1}`, size: '18', color: C.grey, bgcolor: C.catDsk, show_topbar: false },
 			feedbacks: [
-				{ feedbackId: 'dsk_configured', options: { layer }, style: { color: C.white, bgcolor: C.dark } },
+				{ feedbackId: 'dsk_configured', options: { layer }, style: { color: C.white, bgcolor: C.catDsk } },
 				{ feedbackId: 'dsk_visible', options: { layer }, style: { bgcolor: C.orange, color: C.white } },
 			],
 			steps: [{ down: [{ actionId: 'dsk_toggle', options: { layer, visible: false, useForceVisible: false } }], up: [] }],
@@ -196,7 +202,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			type: 'button',
 			category: '7. Video - OVL Alpha',
 			name: `OVL ${pct}%`,
-			style: { text: `OVL\n${pct}%`, size: '14', color: C.white, bgcolor: C.slate },
+			style: { text: `OVL\n${pct}%`, size: '14', color: C.white, bgcolor: C.catOvl, show_topbar: false },
 			feedbacks: [],
 			steps: [{ down: [{ actionId: 'set_ovl_alpha', options: { alpha: pct } }], up: [] }],
 		}
@@ -208,7 +214,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			type: 'button',
 			category: '10. Graphics',
 			name: `${gfx.name} On`,
-			style: { text: `${gfx.name}\nON`, size: '14', color: C.white, bgcolor: C.dark },
+			style: { text: `${gfx.name}\nON`, size: '14', color: C.white, bgcolor: C.dark, show_topbar: false },
 			feedbacks: [
 				{ feedbackId: 'graphic_active', options: { overlayId: gfx.id }, style: { bgcolor: C.yellow, color: C.black } },
 			],
@@ -219,7 +225,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			type: 'button',
 			category: '10. Graphics',
 			name: `${gfx.name} Off`,
-			style: { text: `${gfx.name}\nOFF`, size: '14', color: C.white, bgcolor: C.dark },
+			style: { text: `${gfx.name}\nOFF`, size: '14', color: C.white, bgcolor: C.dark, show_topbar: false },
 			feedbacks: [],
 			steps: [{ down: [{ actionId: 'graphic_off', options: { overlayId: gfx.id } }], up: [] }],
 		}
@@ -233,7 +239,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			type: 'button',
 			category: '11. Macros',
 			name: `Macro: ${macro.label}`,
-			style: { text: macro.label, size: '14', color: C.white, bgcolor: C.navy },
+			style: { text: macro.label, size: '14', color: C.white, bgcolor: C.navy, show_topbar: false },
 			feedbacks: [],
 			steps: [{ down: [{ actionId: 'macro_exec', options: { macroId: macro.id } }], up: [] }],
 		}
@@ -249,7 +255,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			type: 'button',
 			category: '8. Audio - Channels',
 			name: `${ch.label} Mute`,
-			style: { text: `${ch.label}\nMUTE`, size: '14', color: C.white, bgcolor: C.dark },
+			style: { text: `${ch.label}\nMUTE`, size: '14', color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
 			feedbacks: [
 				{ feedbackId: 'audio_ch_inactive', options: { elementId: ch.id }, style: { color: C.grey } },
 				{ feedbackId: 'audio_muted',       options: { elementId: ch.id }, style: { bgcolor: C.orange, color: C.white } },
@@ -261,7 +267,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 				type: 'button',
 				category: '8. Audio - Channels',
 				name: `${ch.label} Volume ${dir === 'up' ? 'Up' : 'Down'}`,
-				style: { text: `${ch.label}\n${dir === 'up' ? '▲' : '▼'}`, size: '14', color: C.white, bgcolor: C.dark },
+				style: { text: `${ch.label}\n${dir === 'up' ? '▲' : '▼'}`, size: '14', color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
 				feedbacks: [
 					{ feedbackId: 'audio_ch_inactive', options: { elementId: ch.id }, style: { color: C.grey } },
 				],
@@ -272,7 +278,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			type: 'button',
 			category: '8. Audio - Channels',
 			name: `${ch.label} Fader`,
-			style: { text: `${ch.label}\nFADER`, size: '14', color: C.white, bgcolor: C.slate },
+			style: { text: `${ch.label}\nFADER`, size: '14', color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
 			feedbacks: [
 				{ feedbackId: 'audio_ch_inactive', options: { elementId: ch.id }, style: { color: C.grey } },
 				{ feedbackId: 'audio_muted',       options: { elementId: ch.id }, style: { bgcolor: C.orange, color: C.white } },
@@ -296,7 +302,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			type: 'button',
 			category: '9. Audio - X Buttons',
 			name: `Select ${ch.label}`,
-			style: { text: ch.label, size: '14', color: C.white, bgcolor: C.dark },
+			style: { text: ch.label, size: '14', color: C.white, bgcolor: C.catAudioCh, show_topbar: false },
 			feedbacks: [
 				{ feedbackId: 'audio_ch_inactive', options: { elementId: ch.id }, style: { color: C.grey } },
 				{ feedbackId: 'audio_ch_selected', options: { elementId: ch.id }, style: { bgcolor: C.orange, color: C.white } },
@@ -308,7 +314,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 		type: 'button',
 		category: '9. Audio - X Buttons',
 		name: 'Mute X',
-		style: { text: 'MUTE\nX', size: '14', color: C.white, bgcolor: C.dark },
+		style: { text: 'MUTE\nX', size: '14', color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
 		feedbacks: [
 			{ feedbackId: 'audio_muted_x', options: {}, style: { bgcolor: C.orange, color: C.white } },
 		],
@@ -319,7 +325,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 		type: 'button',
 		category: '9. Audio - X Buttons',
 		name: 'X Fader',
-		style: { text: 'X\nFADER', size: '14', color: C.white, bgcolor: C.slate },
+		style: { text: 'X\nFADER', size: '14', color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
 		feedbacks: [
 			{ feedbackId: 'audio_muted_x', options: {}, style: { bgcolor: C.orange, color: C.white } },
 		],
@@ -334,7 +340,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 		type: 'button',
 		category: '9. Audio - X Buttons',
 		name: 'Volume Up X',
-		style: { text: 'VOL ▲\nX', size: '14', color: C.white, bgcolor: C.dark },
+		style: { text: 'VOL ▲\nX', size: '14', color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
 		feedbacks: [],
 		steps: [{ down: [{ actionId: 'audio_nudge_x', options: { direction: 'up', step: 5 } }], up: [] }],
 	}
@@ -342,7 +348,7 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 		type: 'button',
 		category: '9. Audio - X Buttons',
 		name: 'Volume Down X',
-		style: { text: 'VOL ▼\nX', size: '14', color: C.white, bgcolor: C.dark },
+		style: { text: 'VOL ▼\nX', size: '14', color: C.white, bgcolor: C.catAudioCtrl, show_topbar: false },
 		feedbacks: [],
 		steps: [{ down: [{ actionId: 'audio_nudge_x', options: { direction: 'down', step: 5 } }], up: [] }],
 	}

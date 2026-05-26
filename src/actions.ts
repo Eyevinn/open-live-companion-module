@@ -139,7 +139,13 @@ export function getActionDefinitions(
 				const idx = Number(action.options['sourceIndex'] ?? 1)
 				const mixerInput = resolveMixerInput(idx)
 				if (!mixerInput) return
-				send({ type: 'CUT', mixerInput })
+				// PiP virtual sources: no CUT_TO_PIP exists — select on PVW then TAKE
+				if (mixerInput.startsWith('pip:')) {
+					send({ type: 'SELECT_PVW_PIP', pip: parseInt(mixerInput.slice(4), 10) })
+					send({ type: 'TAKE' })
+				} else {
+					send({ type: 'CUT', mixerInput })
+				}
 			},
 		},
 
@@ -153,7 +159,12 @@ export function getActionDefinitions(
 				if (!mixerInput) return
 				// No-op if the source is already live on PGM — can't preview what's on air
 				if (getState().pgm === mixerInput) return
-				send({ type: 'SET_PVW', mixerInput })
+				// PiP virtual sources use mixerInput "pip:N" — route to SELECT_PVW_PIP
+				if (mixerInput.startsWith('pip:')) {
+					send({ type: 'SELECT_PVW_PIP', pip: parseInt(mixerInput.slice(4), 10) })
+				} else {
+					send({ type: 'SET_PVW', mixerInput })
+				}
 			},
 		},
 
@@ -444,8 +455,8 @@ export function getActionDefinitions(
 				{
 					id: 'step',
 					type: 'number',
-					label: 'Step (%)',
-					default: 5,
+					label: 'Step (% of current level)',
+					default: 10,
 					min: 1,
 					max: 25,
 				},
@@ -453,20 +464,19 @@ export function getActionDefinitions(
 			callback: (action) => {
 				const elementId = String(action.options['elementId'] ?? 'ch1')
 				const direction = String(action.options['direction'] ?? 'up')
-				const step = Number(action.options['step'] ?? 5) / 100
+				const ratio = 1 + Number(action.options['step'] ?? 5) / 100  // e.g. 1.05 for 5%
 				const ch = getState().audioChannels[elementId]
-				const current = ch?.volume ?? 1
-				const raw = direction === 'up' ? current + step : current - step
+				const current = Math.max(0.0001, ch?.volume ?? 1)
+				const raw = direction === 'up' ? current * ratio : current / ratio
 				const atFloor = raw <= 0.0001
-				const wasAtFloor = current <= 0.0001
-				const volume = Math.max(0.0001, Math.min(0.9999, raw))
+				const wasAtFloor = (ch?.volume ?? 1) <= 0.0001
+				const volume = Math.max(0.0001, Math.min(10.0, raw))
 				if (atFloor) {
 					if (!wasAtFloor) send({ type: 'AUDIO_SET', elementId, property: 'volume', value: 0.0001 })
 					if (!ch?.muted) send({ type: 'AUDIO_SET', elementId, property: 'mute', value: true })
 					return
 				}
 				if (ch?.muted) send({ type: 'AUDIO_SET', elementId, property: 'mute', value: false })
-				if (volume === current) return
 				send({ type: 'AUDIO_SET', elementId, property: 'volume', value: volume })
 			},
 		},
@@ -520,8 +530,8 @@ export function getActionDefinitions(
 				{
 					id: 'step',
 					type: 'number',
-					label: 'Step (%)',
-					default: 5,
+					label: 'Step (% of current level)',
+					default: 10,
 					min: 1,
 					max: 25,
 				},
@@ -530,20 +540,19 @@ export function getActionDefinitions(
 				const elementId = getState().selectedAudioCh
 				if (!elementId) return
 				const direction = String(action.options['direction'] ?? 'up')
-				const step = Number(action.options['step'] ?? 5) / 100
+				const ratio = 1 + Number(action.options['step'] ?? 5) / 100
 				const ch = getState().audioChannels[elementId]
-				const current = ch?.volume ?? 1
-				const raw = direction === 'up' ? current + step : current - step
+				const current = Math.max(0.0001, ch?.volume ?? 1)
+				const raw = direction === 'up' ? current * ratio : current / ratio
 				const atFloor = raw <= 0.0001
-				const wasAtFloor = current <= 0.0001
-				const volume = Math.max(0.0001, Math.min(0.9999, raw))
+				const wasAtFloor = (ch?.volume ?? 1) <= 0.0001
+				const volume = Math.max(0.0001, Math.min(10.0, raw))
 				if (atFloor) {
 					if (!wasAtFloor) send({ type: 'AUDIO_SET', elementId, property: 'volume', value: 0.0001 })
 					if (!ch?.muted) send({ type: 'AUDIO_SET', elementId, property: 'mute', value: true })
 					return
 				}
 				if (ch?.muted) send({ type: 'AUDIO_SET', elementId, property: 'mute', value: false })
-				if (volume === current) return
 				send({ type: 'AUDIO_SET', elementId, property: 'volume', value: volume })
 			},
 		},
