@@ -164,8 +164,8 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 		presets[`auto_${t.type}_custom`] = {
 			type: 'button',
 			category: '5. Video - Transitions',
-			name: `${t.label} Custom`,
-			style: { text: `${t.label}\nCUSTOM`, size: '14', color: C.black, bgcolor: C.white, show_topbar: false },
+			name: `${t.label}`,
+			style: { text: `${t.label}`, size: '18', color: C.white, bgcolor: C.catTransitions, show_topbar: false },
 			feedbacks: [],
 			steps: [{ down: [{ actionId: 'auto', options: { transitionType: t.type, durationMs: 1000 } }], up: [] }],
 		}

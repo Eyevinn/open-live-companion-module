@@ -9597,9 +9597,9 @@ function getActionDefinitions(getWsClient, production, getState, callbacks) {
         const idx = Number(action.options["sourceIndex"] ?? 1);
         const mixerInput = resolveMixerInput(idx);
         if (!mixerInput) return;
+        if (getState().pgm === mixerInput) return;
         if (mixerInput.startsWith("pip:")) {
-          send({ type: "SELECT_PVW_PIP", pip: parseInt(mixerInput.slice(4), 10) });
-          send({ type: "TAKE" });
+          send({ type: "TAKE", pip: parseInt(mixerInput.slice(4), 10) });
         } else {
           send({ type: "CUT", mixerInput });
         }
@@ -10427,9 +10427,8 @@ ${d.suffix}`, size: "14", color: C.white, bgcolor: C.catTransitions, show_topbar
     presets[`auto_${t.type}_custom`] = {
       type: "button",
       category: "5. Video - Transitions",
-      name: `${t.label} Custom`,
-      style: { text: `${t.label}
-CUSTOM`, size: "14", color: C.black, bgcolor: C.white, show_topbar: false },
+      name: `${t.label}`,
+      style: { text: `${t.label}`, size: "18", color: C.white, bgcolor: C.catTransitions, show_topbar: false },
       feedbacks: [],
       steps: [{ down: [{ actionId: "auto", options: { transitionType: t.type, durationMs: 1e3 } }], up: [] }]
     };

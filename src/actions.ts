@@ -139,10 +139,12 @@ export function getActionDefinitions(
 				const idx = Number(action.options['sourceIndex'] ?? 1)
 				const mixerInput = resolveMixerInput(idx)
 				if (!mixerInput) return
-				// PiP virtual sources: no CUT_TO_PIP exists — select on PVW then TAKE
+				// No-op if the source is already live on PGM
+				if (getState().pgm === mixerInput) return
+				// PiP virtual sources: atomic TAKE with pip index avoids the two-step
+				// SELECT_PVW_PIP + TAKE race that leaves the PiP in both PGM and PVW
 				if (mixerInput.startsWith('pip:')) {
-					send({ type: 'SELECT_PVW_PIP', pip: parseInt(mixerInput.slice(4), 10) })
-					send({ type: 'TAKE' })
+					send({ type: 'TAKE', pip: parseInt(mixerInput.slice(4), 10) })
 				} else {
 					send({ type: 'CUT', mixerInput })
 				}
