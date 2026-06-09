@@ -85,9 +85,6 @@ export function getLandingPresets(_productions: ProductionDoc[]): CompanionPrese
 // -----------------------------------------------------------------------
 export function getControlPresets(production: ProductionDoc | null): CompanionPresetDefinitions {
 	const presets: CompanionPresetDefinitions = {}
-	const graphics = production?.graphics ?? []
-	const macros = production?.macros ?? []
-
 	// ── Navigation ───────────────────────────────────────────────────────────
 	presets['back_to_productions'] = {
 		type: 'button',
@@ -205,43 +202,6 @@ export function getControlPresets(production: ProductionDoc | null): CompanionPr
 			style: { text: `OVL\n${pct}%`, size: '14', color: C.white, bgcolor: C.catOvl, show_topbar: false },
 			feedbacks: [],
 			steps: [{ down: [{ actionId: 'set_ovl_alpha', options: { alpha: pct } }], up: [] }],
-		}
-	}
-
-	// ── Graphics ─────────────────────────────────────────────────────────────
-	for (const gfx of graphics) {
-		presets[`gfx_${gfx.id}_on`] = {
-			type: 'button',
-			category: '10. Graphics',
-			name: `${gfx.name} On`,
-			style: { text: `${gfx.name}\nON`, size: '14', color: C.white, bgcolor: C.dark, show_topbar: false },
-			feedbacks: [
-				{ feedbackId: 'graphic_active', options: { overlayId: gfx.id }, style: { bgcolor: C.yellow, color: C.black } },
-			],
-			steps: [{ down: [{ actionId: 'graphic_on', options: { overlayId: gfx.id } }], up: [] }],
-		}
-
-		presets[`gfx_${gfx.id}_off`] = {
-			type: 'button',
-			category: '10. Graphics',
-			name: `${gfx.name} Off`,
-			style: { text: `${gfx.name}\nOFF`, size: '14', color: C.white, bgcolor: C.dark, show_topbar: false },
-			feedbacks: [],
-			steps: [{ down: [{ actionId: 'graphic_off', options: { overlayId: gfx.id } }], up: [] }],
-		}
-	}
-
-	// ── Macros ───────────────────────────────────────────────────────────────
-	for (let i = 0; i < macros.length; i++) {
-		const macro = macros[i]
-		if (!macro) continue
-		presets[`macro_${i + 1}`] = {
-			type: 'button',
-			category: '11. Macros',
-			name: `Macro: ${macro.label}`,
-			style: { text: macro.label, size: '14', color: C.white, bgcolor: C.navy, show_topbar: false },
-			feedbacks: [],
-			steps: [{ down: [{ actionId: 'macro_exec', options: { macroId: macro.id } }], up: [] }],
 		}
 	}
 

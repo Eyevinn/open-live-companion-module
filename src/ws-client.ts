@@ -4,14 +4,11 @@ import { EventEmitter } from 'events'
 export type WsInboundMessage =
 	| { type: 'TALLY'; pgm: string | null; pvw: string | null }
 	| { type: 'ON_AIR'; value: boolean }
-	| { type: 'GRAPHIC'; overlayId: string; active: boolean }
 	| { type: 'DSK_STATE'; layer: number; visible: boolean }
 	| { type: 'FTB_STATE'; active: boolean }
 	| { type: 'OVL_STATE'; alpha: number }
 	| { type: 'AUDIO_STATE'; elementId: string; property: 'volume' | 'mute'; value: number | boolean }
 	| { type: 'PIP_STATE'; pgmPip: number | null; pvwPip: number | null; pips: Array<Record<string, unknown>> }
-	| { type: 'MACRO_EXECUTED'; macroId: string }
-	| { type: 'MACRO_ERROR'; macroId: string; failedActionIndex: number; error: string }
 	| { type: 'ERROR'; error: string }
 
 export type WsOutboundMessage =
@@ -20,13 +17,10 @@ export type WsOutboundMessage =
 	| { type: 'SET_PVW'; mixerInput: string }
 	| { type: 'FTB'; active?: boolean; durationMs: number }
 	| { type: 'SET_OVL'; alpha: number }
-	| { type: 'TAKE' }
+	| { type: 'TAKE'; pip?: number }
 	| { type: 'GO_LIVE' }
 	| { type: 'CUT_STREAM' }
-	| { type: 'GRAPHIC_ON'; overlayId: string }
-	| { type: 'GRAPHIC_OFF'; overlayId: string }
 	| { type: 'DSK_TOGGLE'; layer: number; visible?: boolean }
-	| { type: 'MACRO_EXEC'; macroId: string }
 	| { type: 'AUDIO_SET'; elementId: string; property: 'volume' | 'mute'; value: number | boolean }
 	| { type: 'SELECT_PVW_PIP'; pip: number }
 

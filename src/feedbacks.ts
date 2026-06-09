@@ -19,9 +19,6 @@ export function getFeedbackDefinitions(
 	getState: () => ModuleState,
 	production: ProductionDoc | null,
 ): CompanionFeedbackDefinitions {
-	const graphics = production?.graphics ?? []
-	const graphicChoices = graphics.map((g) => ({ id: g.id, label: g.name }))
-
 	return {
 		pgm_tally: {
 			type: 'boolean',
@@ -81,30 +78,6 @@ export function getFeedbackDefinitions(
 				color: combineRgb(255, 255, 255),
 			},
 			callback: () => getState().ftbActive,
-		},
-
-		graphic_active: {
-			type: 'boolean',
-			name: 'Graphic Active',
-			description: 'Active when the specified graphic overlay is visible',
-			options: [
-				{
-					id: 'overlayId',
-					type: 'dropdown',
-					label: 'Graphic',
-					choices: graphicChoices.length > 0 ? graphicChoices : [{ id: '', label: '(no graphics)' }],
-					default: graphicChoices[0]?.id ?? '',
-					allowCustom: true,
-				},
-			],
-			defaultStyle: {
-				bgcolor: combineRgb(255, 200, 0),
-				color: combineRgb(0, 0, 0),
-			},
-			callback: (feedback) => {
-				const overlayId = String(feedback.options['overlayId'] ?? '')
-				return getState().graphics[overlayId] === true
-			},
 		},
 
 		production_slot_occupied: {

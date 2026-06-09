@@ -29,12 +29,6 @@ export function getActionDefinitions(
 	getState: () => ModuleState,
 	callbacks: ActionCallbacks,
 ): CompanionActionDefinitions {
-	const graphics = production?.graphics ?? []
-	const macros = production?.macros ?? []
-
-	const graphicChoices = graphics.map((g) => ({ id: g.id, label: g.name }))
-	const macroChoices = macros.map((m) => ({ id: m.id, label: m.label }))
-
 	function send(msg: Parameters<WsClient['send']>[0]): void {
 		const client = getWsClient()
 		if (client) client.send(msg)
@@ -332,45 +326,6 @@ export function getActionDefinitions(
 		},
 
 		// -----------------------------------------------------------------------
-		// Graphics
-		// -----------------------------------------------------------------------
-		graphic_on: {
-			name: 'Graphic On',
-			description: 'Make a named graphic overlay visible on the output. The Graphic Active feedback lights when it is showing.',
-			options: [
-				{
-					id: 'overlayId',
-					type: 'dropdown',
-					label: 'Graphic',
-					choices: graphicChoices.length > 0 ? graphicChoices : [{ id: '', label: '(no graphics)' }],
-					default: graphicChoices[0]?.id ?? '',
-					allowCustom: true,
-				},
-			],
-			callback: (action) => {
-				send({ type: 'GRAPHIC_ON', overlayId: String(action.options['overlayId'] ?? '') })
-			},
-		},
-
-		graphic_off: {
-			name: 'Graphic Off',
-			description: 'Hide a named graphic overlay from the output.',
-			options: [
-				{
-					id: 'overlayId',
-					type: 'dropdown',
-					label: 'Graphic',
-					choices: graphicChoices.length > 0 ? graphicChoices : [{ id: '', label: '(no graphics)' }],
-					default: graphicChoices[0]?.id ?? '',
-					allowCustom: true,
-				},
-			],
-			callback: (action) => {
-				send({ type: 'GRAPHIC_OFF', overlayId: String(action.options['overlayId'] ?? '') })
-			},
-		},
-
-		// -----------------------------------------------------------------------
 		// DSK
 		// -----------------------------------------------------------------------
 		dsk_toggle: {
@@ -409,9 +364,6 @@ export function getActionDefinitions(
 			},
 		},
 
-		// -----------------------------------------------------------------------
-		// Macros
-		// -----------------------------------------------------------------------
 		// -----------------------------------------------------------------------
 		// Audio
 		// -----------------------------------------------------------------------
@@ -559,22 +511,5 @@ export function getActionDefinitions(
 			},
 		},
 
-		macro_exec: {
-			name: 'Execute Macro',
-			description: 'Run a production macro defined in Open Live. Macros can batch multiple switcher operations into a single button press.',
-			options: [
-				{
-					id: 'macroId',
-					type: 'dropdown',
-					label: 'Macro',
-					choices: macroChoices.length > 0 ? macroChoices : [{ id: '', label: '(no macros)' }],
-					default: macroChoices[0]?.id ?? '',
-					allowCustom: true,
-				},
-			],
-			callback: (action) => {
-				send({ type: 'MACRO_EXEC', macroId: String(action.options['macroId'] ?? '') })
-			},
-		},
 	}
 }

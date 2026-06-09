@@ -9500,10 +9500,6 @@ var sourceIndexOption = {
   max: 16
 };
 function getActionDefinitions(getWsClient, production, getState, callbacks) {
-  const graphics = production?.graphics ?? [];
-  const macros = production?.macros ?? [];
-  const graphicChoices = graphics.map((g) => ({ id: g.id, label: g.name }));
-  const macroChoices = macros.map((m) => ({ id: m.id, label: m.label }));
   function send(msg) {
     const client = getWsClient();
     if (client) client.send(msg);
@@ -9774,43 +9770,6 @@ function getActionDefinitions(getWsClient, production, getState, callbacks) {
       }
     },
     // -----------------------------------------------------------------------
-    // Graphics
-    // -----------------------------------------------------------------------
-    graphic_on: {
-      name: "Graphic On",
-      description: "Make a named graphic overlay visible on the output. The Graphic Active feedback lights when it is showing.",
-      options: [
-        {
-          id: "overlayId",
-          type: "dropdown",
-          label: "Graphic",
-          choices: graphicChoices.length > 0 ? graphicChoices : [{ id: "", label: "(no graphics)" }],
-          default: graphicChoices[0]?.id ?? "",
-          allowCustom: true
-        }
-      ],
-      callback: (action) => {
-        send({ type: "GRAPHIC_ON", overlayId: String(action.options["overlayId"] ?? "") });
-      }
-    },
-    graphic_off: {
-      name: "Graphic Off",
-      description: "Hide a named graphic overlay from the output.",
-      options: [
-        {
-          id: "overlayId",
-          type: "dropdown",
-          label: "Graphic",
-          choices: graphicChoices.length > 0 ? graphicChoices : [{ id: "", label: "(no graphics)" }],
-          default: graphicChoices[0]?.id ?? "",
-          allowCustom: true
-        }
-      ],
-      callback: (action) => {
-        send({ type: "GRAPHIC_OFF", overlayId: String(action.options["overlayId"] ?? "") });
-      }
-    },
-    // -----------------------------------------------------------------------
     // DSK
     // -----------------------------------------------------------------------
     dsk_toggle: {
@@ -9846,9 +9805,6 @@ function getActionDefinitions(getWsClient, production, getState, callbacks) {
         send({ type: "DSK_TOGGLE", layer, visible });
       }
     },
-    // -----------------------------------------------------------------------
-    // Macros
-    // -----------------------------------------------------------------------
     // -----------------------------------------------------------------------
     // Audio
     // -----------------------------------------------------------------------
@@ -9990,23 +9946,6 @@ function getActionDefinitions(getWsClient, production, getState, callbacks) {
         if (ch?.muted) send({ type: "AUDIO_SET", elementId, property: "mute", value: false });
         send({ type: "AUDIO_SET", elementId, property: "volume", value: volume });
       }
-    },
-    macro_exec: {
-      name: "Execute Macro",
-      description: "Run a production macro defined in Open Live. Macros can batch multiple switcher operations into a single button press.",
-      options: [
-        {
-          id: "macroId",
-          type: "dropdown",
-          label: "Macro",
-          choices: macroChoices.length > 0 ? macroChoices : [{ id: "", label: "(no macros)" }],
-          default: macroChoices[0]?.id ?? "",
-          allowCustom: true
-        }
-      ],
-      callback: (action) => {
-        send({ type: "MACRO_EXEC", macroId: String(action.options["macroId"] ?? "") });
-      }
     }
   };
 }
@@ -10022,8 +9961,6 @@ var sourceIndexOption2 = {
   max: 16
 };
 function getFeedbackDefinitions(getState, production) {
-  const graphics = production?.graphics ?? [];
-  const graphicChoices = graphics.map((g) => ({ id: g.id, label: g.name }));
   return {
     pgm_tally: {
       type: "boolean",
@@ -10080,29 +10017,6 @@ function getFeedbackDefinitions(getState, production) {
         color: (0, import_base.combineRgb)(255, 255, 255)
       },
       callback: () => getState().ftbActive
-    },
-    graphic_active: {
-      type: "boolean",
-      name: "Graphic Active",
-      description: "Active when the specified graphic overlay is visible",
-      options: [
-        {
-          id: "overlayId",
-          type: "dropdown",
-          label: "Graphic",
-          choices: graphicChoices.length > 0 ? graphicChoices : [{ id: "", label: "(no graphics)" }],
-          default: graphicChoices[0]?.id ?? "",
-          allowCustom: true
-        }
-      ],
-      defaultStyle: {
-        bgcolor: (0, import_base.combineRgb)(255, 200, 0),
-        color: (0, import_base.combineRgb)(0, 0, 0)
-      },
-      callback: (feedback) => {
-        const overlayId = String(feedback.options["overlayId"] ?? "");
-        return getState().graphics[overlayId] === true;
-      }
     },
     production_slot_occupied: {
       type: "boolean",
@@ -10357,8 +10271,6 @@ function getLandingPresets(_productions) {
 }
 function getControlPresets(production) {
   const presets = {};
-  const graphics = production?.graphics ?? [];
-  const macros = production?.macros ?? [];
   presets["back_to_productions"] = {
     type: "button",
     category: "1. Navigation",
@@ -10463,40 +10375,6 @@ ${d.suffix}`, size: "14", color: C.white, bgcolor: C.catTransitions, show_topbar
 ${pct}%`, size: "14", color: C.white, bgcolor: C.catOvl, show_topbar: false },
       feedbacks: [],
       steps: [{ down: [{ actionId: "set_ovl_alpha", options: { alpha: pct } }], up: [] }]
-    };
-  }
-  for (const gfx of graphics) {
-    presets[`gfx_${gfx.id}_on`] = {
-      type: "button",
-      category: "10. Graphics",
-      name: `${gfx.name} On`,
-      style: { text: `${gfx.name}
-ON`, size: "14", color: C.white, bgcolor: C.dark, show_topbar: false },
-      feedbacks: [
-        { feedbackId: "graphic_active", options: { overlayId: gfx.id }, style: { bgcolor: C.yellow, color: C.black } }
-      ],
-      steps: [{ down: [{ actionId: "graphic_on", options: { overlayId: gfx.id } }], up: [] }]
-    };
-    presets[`gfx_${gfx.id}_off`] = {
-      type: "button",
-      category: "10. Graphics",
-      name: `${gfx.name} Off`,
-      style: { text: `${gfx.name}
-OFF`, size: "14", color: C.white, bgcolor: C.dark, show_topbar: false },
-      feedbacks: [],
-      steps: [{ down: [{ actionId: "graphic_off", options: { overlayId: gfx.id } }], up: [] }]
-    };
-  }
-  for (let i = 0; i < macros.length; i++) {
-    const macro = macros[i];
-    if (!macro) continue;
-    presets[`macro_${i + 1}`] = {
-      type: "button",
-      category: "11. Macros",
-      name: `Macro: ${macro.label}`,
-      style: { text: macro.label, size: "14", color: C.white, bgcolor: C.navy, show_topbar: false },
-      feedbacks: [],
-      steps: [{ down: [{ actionId: "macro_exec", options: { macroId: macro.id } }], up: [] }]
     };
   }
   const audioChannels = [
@@ -10631,7 +10509,6 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
       onAir: false,
       ftbActive: false,
       ovlAlpha: 1,
-      graphics: {},
       dskLayers: {},
       audioChannels: {},
       audioChannelCount: 0,
@@ -10887,7 +10764,7 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
       ...audioChannelVars
     });
     this.log("debug", `Control mode registered \u2014 forcing checkFeedbacks`);
-    this.checkFeedbacks("pgm_tally", "pvw_tally", "on_air", "ftb_active", "graphic_active", "dsk_configured", "dsk_visible", "audio_muted", "audio_ch_inactive", "audio_ch_selected", "audio_muted_x");
+    this.checkFeedbacks("pgm_tally", "pvw_tally", "on_air", "ftb_active", "dsk_configured", "dsk_visible", "audio_muted", "audio_ch_inactive", "audio_ch_selected", "audio_muted_x");
   }
   // -----------------------------------------------------------------------
   // WebSocket
@@ -10899,7 +10776,7 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
     client.on("connected", () => {
       this.log("info", "WebSocket connected");
       this.updateStatus(import_base3.InstanceStatus.Ok);
-      this.checkFeedbacks("pgm_tally", "pvw_tally", "on_air", "ftb_active", "graphic_active", "dsk_configured", "dsk_visible", "audio_muted", "audio_ch_inactive", "audio_ch_selected", "audio_muted_x");
+      this.checkFeedbacks("pgm_tally", "pvw_tally", "on_air", "ftb_active", "dsk_configured", "dsk_visible", "audio_muted", "audio_ch_inactive", "audio_ch_selected", "audio_muted_x");
     });
     client.on("disconnected", () => {
       this.log("warn", "WebSocket disconnected, reconnecting\u2026");
@@ -10935,11 +10812,6 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
         this.state.onAir = msg.value;
         this.setVariableValues({ on_air: String(msg.value) });
         this.checkFeedbacks("on_air");
-        break;
-      }
-      case "GRAPHIC": {
-        this.state.graphics[msg.overlayId] = msg.active;
-        this.checkFeedbacks("graphic_active");
         break;
       }
       case "DSK_STATE": {
@@ -11005,14 +10877,6 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
           return;
         }
         this.checkFeedbacks("pgm_tally", "pvw_tally");
-        break;
-      }
-      case "MACRO_EXECUTED": {
-        this.log("debug", `Macro executed: ${msg.macroId}`);
-        break;
-      }
-      case "MACRO_ERROR": {
-        this.log("warn", `Macro error at action ${msg.failedActionIndex}: ${msg.error}`);
         break;
       }
       case "ERROR": {
@@ -11205,7 +11069,6 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
     this.state.pvw = null;
     this.state.onAir = false;
     this.state.ftbActive = false;
-    this.state.graphics = {};
     this.state.dskLayers = {};
     this.state.audioChannels = {};
     this.state.audioChannelCount = 0;

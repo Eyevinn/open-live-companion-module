@@ -23,27 +23,11 @@ export interface ProductionSource {
 	mixerInput: string
 }
 
-export interface ProductionGraphic {
-	id: string
-	name: string
-	type: string
-}
-
-export interface ProductionMacro {
-	id: string
-	slot: number
-	label: string
-	color: string
-	actions: unknown[]
-}
-
 export interface ProductionDoc {
 	_id: string
 	name: string
 	status: 'idle' | 'activating' | 'active' | 'inactive'
 	sources: ProductionSource[]
-	graphics: ProductionGraphic[]
-	macros: ProductionMacro[]
 	graphicAssignments?: Array<{ dskInput: string; graphicId: string }>
 }
 
@@ -55,7 +39,6 @@ export interface ModuleState {
 	onAir: boolean
 	ftbActive: boolean
 	ovlAlpha: number // 0.0–1.0
-	graphics: Record<string, boolean>
 	dskLayers: Record<number, boolean>
 	audioChannels: Record<string, { volume: number; muted: boolean }>
 	audioChannelCount: number
@@ -87,7 +70,6 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		onAir: false,
 		ftbActive: false,
 		ovlAlpha: 1,
-		graphics: {},
 		dskLayers: {},
 		audioChannels: {},
 		audioChannelCount: 0,
@@ -392,7 +374,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		})
 		// Force Companion to re-evaluate all feedbacks now that definitions are registered.
 		this.log('debug', `Control mode registered — forcing checkFeedbacks`)
-		this.checkFeedbacks('pgm_tally', 'pvw_tally', 'on_air', 'ftb_active', 'graphic_active', 'dsk_configured', 'dsk_visible', 'audio_muted', 'audio_ch_inactive', 'audio_ch_selected', 'audio_muted_x')
+		this.checkFeedbacks('pgm_tally', 'pvw_tally', 'on_air', 'ftb_active', 'dsk_configured', 'dsk_visible', 'audio_muted', 'audio_ch_inactive', 'audio_ch_selected', 'audio_muted_x')
 	}
 
 	// -----------------------------------------------------------------------
@@ -408,7 +390,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			this.log('info', 'WebSocket connected')
 			this.updateStatus(InstanceStatus.Ok)
 			// Re-evaluate all feedbacks on (re)connect so stale state is cleared
-			this.checkFeedbacks('pgm_tally', 'pvw_tally', 'on_air', 'ftb_active', 'graphic_active', 'dsk_configured', 'dsk_visible', 'audio_muted', 'audio_ch_inactive', 'audio_ch_selected', 'audio_muted_x')
+			this.checkFeedbacks('pgm_tally', 'pvw_tally', 'on_air', 'ftb_active', 'dsk_configured', 'dsk_visible', 'audio_muted', 'audio_ch_inactive', 'audio_ch_selected', 'audio_muted_x')
 		})
 
 		client.on('disconnected', () => {
@@ -452,11 +434,6 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 				this.state.onAir = msg.value
 				this.setVariableValues({ on_air: String(msg.value) })
 				this.checkFeedbacks('on_air')
-				break
-			}
-			case 'GRAPHIC': {
-				this.state.graphics[msg.overlayId] = msg.active
-				this.checkFeedbacks('graphic_active')
 				break
 			}
 			case 'DSK_STATE': {
@@ -533,14 +510,6 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 				}
 
 				this.checkFeedbacks('pgm_tally', 'pvw_tally')
-				break
-			}
-			case 'MACRO_EXECUTED': {
-				this.log('debug', `Macro executed: ${msg.macroId}`)
-				break
-			}
-			case 'MACRO_ERROR': {
-				this.log('warn', `Macro error at action ${msg.failedActionIndex}: ${msg.error}`)
 				break
 			}
 			case 'ERROR': {
@@ -746,7 +715,6 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		this.state.pvw = null
 		this.state.onAir = false
 		this.state.ftbActive = false
-		this.state.graphics = {}
 		this.state.dskLayers = {}
 		this.state.audioChannels = {}
 		this.state.audioChannelCount = 0
