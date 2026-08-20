@@ -38,6 +38,13 @@ export function getVariableDefinitions(): CompanionVariableDefinition[] {
 	}
 	defs.push({ variableId: 'main_fader_pos', name: 'Main fader position (0–16383, 14-bit)' })
 
+	// ch_N_muted (1–16) + main_muted — current mute state, so a trigger can light a
+	// hardware mute button's LED (same motor-feedback pattern as the faders).
+	for (let i = 1; i <= 16; i++) {
+		defs.push({ variableId: `ch${i}_muted`, name: `Audio channel ${i} muted (true/false)` })
+	}
+	defs.push({ variableId: 'main_muted', name: 'Main fader muted (true/false)' })
+
 	// prod_N_name (1–31) — name of the Nth active production in the landing list
 	for (let i = 1; i <= 31; i++) {
 		defs.push({ variableId: `prod_${i}_name`, name: `Production slot ${i} name` })
@@ -111,6 +118,24 @@ export function emptyFaderPosVars(): Record<string, string> {
 	const v: Record<string, string> = {}
 	for (let i = 1; i <= 16; i++) v[`ch${i}_fader_pos`] = ''
 	v['main_fader_pos'] = ''
+	return v
+}
+
+/** Returns an object suitable for setVariableValues that initialises all mute state slots. */
+export function emptyMuteVars(): Record<string, string> {
+	const v: Record<string, string> = {}
+	for (let i = 1; i <= 16; i++) v[`ch${i}_muted`] = 'false'
+	v['main_muted'] = 'false'
+	return v
+}
+
+/** Returns an object suitable for setVariableValues populated with mute states from the audio channel map. */
+export function muteVarsFromState(audioChannels: Record<string, { muted: boolean }>): Record<string, string> {
+	const v: Record<string, string> = {}
+	for (let i = 1; i <= 16; i++) {
+		v[`ch${i}_muted`] = String(audioChannels[`ch${i}`]?.muted ?? false)
+	}
+	v['main_muted'] = String(audioChannels['main']?.muted ?? false)
 	return v
 }
 

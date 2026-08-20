@@ -9467,6 +9467,10 @@ function getVariableDefinitions() {
     defs.push({ variableId: `ch${i}_fader_pos`, name: `Audio channel ${i} fader position (0\u201316383, 14-bit)` });
   }
   defs.push({ variableId: "main_fader_pos", name: "Main fader position (0\u201316383, 14-bit)" });
+  for (let i = 1; i <= 16; i++) {
+    defs.push({ variableId: `ch${i}_muted`, name: `Audio channel ${i} muted (true/false)` });
+  }
+  defs.push({ variableId: "main_muted", name: "Main fader muted (true/false)" });
   for (let i = 1; i <= 31; i++) {
     defs.push({ variableId: `prod_${i}_name`, name: `Production slot ${i} name` });
   }
@@ -9517,6 +9521,20 @@ function emptyFaderPosVars() {
   const v = {};
   for (let i = 1; i <= 16; i++) v[`ch${i}_fader_pos`] = "";
   v["main_fader_pos"] = "";
+  return v;
+}
+function emptyMuteVars() {
+  const v = {};
+  for (let i = 1; i <= 16; i++) v[`ch${i}_muted`] = "false";
+  v["main_muted"] = "false";
+  return v;
+}
+function muteVarsFromState(audioChannels) {
+  const v = {};
+  for (let i = 1; i <= 16; i++) {
+    v[`ch${i}_muted`] = String(audioChannels[`ch${i}`]?.muted ?? false);
+  }
+  v["main_muted"] = String(audioChannels["main"]?.muted ?? false);
   return v;
 }
 function emptyProductionSlotVars() {
@@ -10679,6 +10697,7 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
       ...emptySourceVars(),
       ...emptyVolumeVars(),
       ...emptyFaderPosVars(),
+      ...emptyMuteVars(),
       ...emptyProductionSlotVars()
     });
     this.updateStatus(import_base3.InstanceStatus.Connecting, "Loading productions");
@@ -10886,6 +10905,7 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
       ...emptySourceVars(),
       ...emptyVolumeVars(),
       ...emptyFaderPosVars(),
+      ...emptyMuteVars(),
       ...productionSlotVarsFromList(this.state.productions)
     });
     this.checkFeedbacks("production_slot_occupied", "production_slot_has_peers", "audio_ch_inactive");
@@ -10925,7 +10945,8 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
       ...sourceVarsFromList(this.selectedProduction?.sources ?? []),
       ...audioChannelVars,
       ...volumeVarsFromState(this.state.audioChannels),
-      ...faderPosVarsFromState(this.state.audioChannels, this.config.faderZeroPoint ?? 75)
+      ...faderPosVarsFromState(this.state.audioChannels, this.config.faderZeroPoint ?? 75),
+      ...muteVarsFromState(this.state.audioChannels)
     });
     this.log("debug", `Control mode registered \u2014 forcing checkFeedbacks`);
     this.checkFeedbacks("pgm_tally", "pvw_tally", "on_air", "ftb_active", "dsk_configured", "dsk_visible", "audio_muted", "audio_ch_inactive", "audio_ch_selected", "audio_muted_x");
@@ -11008,6 +11029,7 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
           });
         } else if (msg.property === "mute") {
           this.state.audioChannels[msg.elementId] = { ...ch, muted: msg.value };
+          this.setVariableValues({ [`${msg.elementId}_muted`]: String(msg.value) });
           this.checkFeedbacks("audio_muted");
         }
         break;

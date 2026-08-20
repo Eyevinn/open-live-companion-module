@@ -6,7 +6,7 @@ import {
 } from '@companion-module/base'
 import { WsClient } from './ws-client.js'
 import { getSat, invalidateSat } from './sat.js'
-import { getVariableDefinitions, emptySourceVars, sourceVarsFromList, emptyProductionSlotVars, productionSlotVarsFromList, emptyVolumeVars, volumeVarsFromState, emptyFaderPosVars, faderPosVarsFromState, volumeToFaderPos } from './variables.js'
+import { getVariableDefinitions, emptySourceVars, sourceVarsFromList, emptyProductionSlotVars, productionSlotVarsFromList, emptyVolumeVars, volumeVarsFromState, emptyFaderPosVars, faderPosVarsFromState, volumeToFaderPos, emptyMuteVars, muteVarsFromState } from './variables.js'
 import { getActionDefinitions, type ActionCallbacks } from './actions.js'
 import { getFeedbackDefinitions } from './feedbacks.js'
 import { getLandingPresets, getControlPresets } from './presets.js'
@@ -102,6 +102,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			...emptySourceVars(),
 			...emptyVolumeVars(),
 			...emptyFaderPosVars(),
+			...emptyMuteVars(),
 			...emptyProductionSlotVars(),
 		})
 		this.updateStatus(InstanceStatus.Connecting, 'Loading productions')
@@ -351,6 +352,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			...emptySourceVars(),
 			...emptyVolumeVars(),
 			...emptyFaderPosVars(),
+			...emptyMuteVars(),
 			...productionSlotVarsFromList(this.state.productions),
 		})
 		this.checkFeedbacks('production_slot_occupied', 'production_slot_has_peers', 'audio_ch_inactive')
@@ -394,6 +396,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			...audioChannelVars,
 			...volumeVarsFromState(this.state.audioChannels),
 			...faderPosVarsFromState(this.state.audioChannels, this.config.faderZeroPoint ?? 75),
+			...muteVarsFromState(this.state.audioChannels),
 		})
 		// Force Companion to re-evaluate all feedbacks now that definitions are registered.
 		this.log('debug', `Control mode registered — forcing checkFeedbacks`)
@@ -495,6 +498,8 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 					})
 				} else if (msg.property === 'mute') {
 					this.state.audioChannels[msg.elementId] = { ...ch, muted: msg.value as boolean }
+					// Expose mute state so a trigger can light a hardware mute-button LED
+					this.setVariableValues({ [`${msg.elementId}_muted`]: String(msg.value) })
 					this.checkFeedbacks('audio_muted')
 				}
 				break
