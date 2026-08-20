@@ -9507,6 +9507,35 @@ function getActionDefinitions(getWsClient, production, getState, callbacks) {
   function resolveMixerInput(sourceIndex) {
     return production?.sources[sourceIndex - 1]?.mixerInput ?? null;
   }
+  function parseNumber(raw) {
+    const trimmed = raw.trim().replace(/,/g, "");
+    if (trimmed === "") return NaN;
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? n : NaN;
+  }
+  function scaleVolume(raw, scale, zeroPoint = 75) {
+    const n = parseNumber(raw);
+    if (Number.isNaN(n)) return null;
+    switch (scale) {
+      case "midi14":
+        return n / 16383;
+      case "midi7":
+        return n / 127;
+      case "float":
+        return n;
+      case "db":
+        return Math.pow(10, n / 20);
+      case "taper": {
+        const z = Math.max(0.1, Math.min(0.99, (zeroPoint || 75) / 100));
+        return Math.pow(10, (n / 16383 - z) / (1 - z));
+      }
+      case "raw":
+        return n;
+      case "percent":
+      default:
+        return n / 100;
+    }
+  }
   const transitionTypeChoices = [
     { id: "fade", label: "Fade" },
     { id: "slide_left", label: "Push Left" },
@@ -9871,6 +9900,77 @@ function getActionDefinitions(getWsClient, production, getState, callbacks) {
           return;
         }
         if (ch?.muted) send({ type: "AUDIO_SET", elementId, property: "mute", value: false });
+        send({ type: "AUDIO_SET", elementId, property: "volume", value: volume });
+      }
+    },
+    set_audio_volume: {
+      name: "Set Audio Volume (Absolute)",
+      description: "Set an audio channel fader to an absolute level in a single shot. Feed it a Companion variable from a MIDI/OSC fader module (e.g. $(FIT_faders_1-8:lastValue)) for 1:1 motorised-fader synchronisation.",
+      options: [
+        {
+          id: "elementId",
+          type: "textinput",
+          label: "Channel ID (ch1, ch2\u2026 or main; leave empty for selected channel)",
+          default: "ch1"
+        },
+        {
+          id: "value",
+          type: "textinput",
+          label: "Fader value (number or variable)",
+          default: "50"
+        },
+        {
+          id: "scale",
+          type: "dropdown",
+          label: "Input scale",
+          choices: [
+            { id: "percent", label: "Percentage (0\u2013100)" },
+            { id: "midi7", label: "MIDI CC / 7-bit (0\u2013127)" },
+            { id: "midi14", label: "MIDI 14-bit / Pitch Wheel (0\u201316383)" },
+            { id: "taper", label: "Tapered dB (0 dB at zero point)" },
+            { id: "float", label: "Float (0.0\u20131.0)" },
+            { id: "db", label: "Decibels (\u221260 to 0 dB)" },
+            { id: "raw", label: "Raw gain (0.0\u201310.0)" }
+          ],
+          default: "percent"
+        },
+        {
+          id: "zeroPoint",
+          type: "number",
+          label: "0 dB position (% of fader travel)",
+          default: 75,
+          min: 10,
+          max: 99,
+          tooltip: 'Physical fader position (as % of travel) where the fader marks 0 dB. Only used with the "Tapered dB" scale. Default 75% matches the Waves FIT; centre-marked faders would use 50%.',
+          isVisible: (options) => options["scale"] === "taper"
+        },
+        {
+          id: "unmute",
+          type: "checkbox",
+          label: "Unmute when moving above zero",
+          default: true
+        }
+      ],
+      callback: (action) => {
+        let elementId = String(action.options["elementId"] ?? "").trim();
+        if (!elementId) elementId = getState().selectedAudioCh;
+        if (!elementId) return;
+        const value = scaleVolume(
+          String(action.options["value"] ?? ""),
+          String(action.options["scale"] ?? "percent"),
+          Number(action.options["zeroPoint"] ?? 75)
+        );
+        if (value === null) return;
+        const volume = Math.max(1e-4, Math.min(10, value));
+        const atFloor = volume <= 1e-4;
+        const ch = getState().audioChannels[elementId];
+        if (atFloor) {
+          if (!ch?.muted) send({ type: "AUDIO_SET", elementId, property: "mute", value: true });
+          return;
+        }
+        if (Boolean(action.options["unmute"]) && ch?.muted) {
+          send({ type: "AUDIO_SET", elementId, property: "mute", value: false });
+        }
         send({ type: "AUDIO_SET", elementId, property: "volume", value: volume });
       }
     },
