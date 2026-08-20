@@ -1,6 +1,6 @@
 import type { CompanionActionDefinitions } from '@companion-module/base'
 import type { WsClient } from './ws-client.js'
-import type { ProductionDoc, ModuleState } from './main.js'
+import type { ProductionDoc, ModuleState, ModuleConfig } from './main.js'
 
 export interface ActionCallbacks {
 	selectProduction: (id: string) => void
@@ -28,6 +28,7 @@ export function getActionDefinitions(
 	production: ProductionDoc | null,
 	getState: () => ModuleState,
 	callbacks: ActionCallbacks,
+	getConfig: () => ModuleConfig,
 ): CompanionActionDefinitions {
 	function send(msg: Parameters<WsClient['send']>[0]): void {
 		const client = getWsClient()
@@ -511,10 +512,10 @@ export function getActionDefinitions(
 					id: 'zeroPoint',
 					type: 'number',
 					label: '0 dB position (% of fader travel)',
-					default: 75,
+					default: getConfig().faderZeroPoint ?? 75,
 					min: 10,
 					max: 99,
-					tooltip: 'Physical fader position (as % of travel) where the fader marks 0 dB. Only used with the "Tapered dB" scale. Default 75% matches the Waves FIT; centre-marked faders would use 50%.',
+					tooltip: 'Physical fader position (as % of travel) where the fader marks 0 dB. Only used with the "Tapered dB" scale. Defaults to the connection "Fader 0 dB position" setting.',
 					isVisible: (options) => options['scale'] === 'taper',
 				},
 				{

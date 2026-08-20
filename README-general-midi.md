@@ -149,3 +149,15 @@ variables exist — see Step 1.)*
 While this guide uses the **Waves FIT** controller (`FIT_faders_1-8` sending 14-bit Pitch Bend values `0–16383`) as a primary example, this workflow applies to **any physical MIDI controller** mapped through Companion.
 
 If you are using a different device (such as a Behringer X-Touch, Korg NanoKONTROL, or Stream Deck dial), simply replace `FIT_faders_1-8:lastValue` with your specific controller's variable name. As long as the controller outputs a numerical value, OpenLive will track it accurately.
+
+---
+
+## Other motorised fader surfaces (Behringer X-Touch / BCF2000)
+
+The Open Live connection has a **"Fader 0 dB position (% of travel)"** setting (default `75` for the Waves FIT). It drives both the **Tapered dB** input scale and the **`ch{N}_fader_pos` / `main_fader_pos`** motor-feedback variables, so changing it re-aligns everything for a different surface's fader markings.
+
+**Behringer X-Touch (MCU mode):** already 14-bit Pitch Bend (0–16383) on channels 1–8 — set **"Fader 0 dB position"** to where the X-Touch marks 0 dB and use it like the FIT. (The X-Touch master fader is MIDI channel 17, not 9.)
+
+**Behringer BCF2000:** defaults to 7-bit CC (0–127). Configure each fader to send **Pitch Bend (14-bit)** — via the front-panel MIDI programming or the BCF2000 Edit software / sysex — so it matches the 0–16383 range. Then set the **"Fader 0 dB position"** to the BCF2000's 0 dB mark.
+
+**Motorised feedback (OpenLive → fader):** watch `$(OpenLive:ch{N}_fader_pos)` (a plain 0–16383 variable, set live with the volume) in a trigger → **Pitch Wheel** action on the fader's MIDI channel. Works for any 14-bit Pitch Bend motorised fader; no expression variables needed.

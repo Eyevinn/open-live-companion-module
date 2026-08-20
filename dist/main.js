@@ -9459,6 +9459,14 @@ function getVariableDefinitions() {
   for (let i = 1; i <= 16; i++) {
     defs.push({ variableId: `ch${i}_name`, name: `Audio channel ${i} name` });
   }
+  for (let i = 1; i <= 16; i++) {
+    defs.push({ variableId: `ch${i}_volume`, name: `Audio channel ${i} volume (gain, 1.0 = unity)` });
+  }
+  defs.push({ variableId: "main_volume", name: "Main fader volume (gain, 1.0 = unity)" });
+  for (let i = 1; i <= 16; i++) {
+    defs.push({ variableId: `ch${i}_fader_pos`, name: `Audio channel ${i} fader position (0\u201316383, 14-bit)` });
+  }
+  defs.push({ variableId: "main_fader_pos", name: "Main fader position (0\u201316383, 14-bit)" });
   for (let i = 1; i <= 31; i++) {
     defs.push({ variableId: `prod_${i}_name`, name: `Production slot ${i} name` });
   }
@@ -9475,6 +9483,40 @@ function sourceVarsFromList(sources) {
   for (let i = 1; i <= 16; i++) {
     v[`source_${i}_name`] = sources[i - 1]?.name ?? "";
   }
+  return v;
+}
+function emptyVolumeVars() {
+  const v = {};
+  for (let i = 1; i <= 16; i++) v[`ch${i}_volume`] = "";
+  v["main_volume"] = "";
+  return v;
+}
+function volumeVarsFromState(audioChannels) {
+  const v = {};
+  for (let i = 1; i <= 16; i++) {
+    v[`ch${i}_volume`] = String(audioChannels[`ch${i}`]?.volume ?? 1);
+  }
+  v["main_volume"] = String(audioChannels["main"]?.volume ?? 1);
+  return v;
+}
+function volumeToFaderPos(volume, zeroPoint = 75) {
+  if (!(volume > 0)) return 0;
+  const z = Math.max(0.1, Math.min(0.99, (zeroPoint || 75) / 100));
+  const pos = z + (1 - z) * Math.log10(volume);
+  return Math.max(0, Math.min(16383, Math.round(pos * 16383)));
+}
+function faderPosVarsFromState(audioChannels, zeroPoint = 75) {
+  const v = {};
+  for (let i = 1; i <= 16; i++) {
+    v[`ch${i}_fader_pos`] = String(volumeToFaderPos(audioChannels[`ch${i}`]?.volume ?? 1, zeroPoint));
+  }
+  v["main_fader_pos"] = String(volumeToFaderPos(audioChannels["main"]?.volume ?? 1, zeroPoint));
+  return v;
+}
+function emptyFaderPosVars() {
+  const v = {};
+  for (let i = 1; i <= 16; i++) v[`ch${i}_fader_pos`] = "";
+  v["main_fader_pos"] = "";
   return v;
 }
 function emptyProductionSlotVars() {
@@ -9499,7 +9541,7 @@ var sourceIndexOption = {
   min: 1,
   max: 16
 };
-function getActionDefinitions(getWsClient, production, getState, callbacks) {
+function getActionDefinitions(getWsClient, production, getState, callbacks, getConfig) {
   function send(msg) {
     const client = getWsClient();
     if (client) client.send(msg);
@@ -9938,10 +9980,10 @@ function getActionDefinitions(getWsClient, production, getState, callbacks) {
           id: "zeroPoint",
           type: "number",
           label: "0 dB position (% of fader travel)",
-          default: 75,
+          default: getConfig().faderZeroPoint ?? 75,
           min: 10,
           max: 99,
-          tooltip: 'Physical fader position (as % of travel) where the fader marks 0 dB. Only used with the "Tapered dB" scale. Default 75% matches the Waves FIT; centre-marked faders would use 50%.',
+          tooltip: 'Physical fader position (as % of travel) where the fader marks 0 dB. Only used with the "Tapered dB" scale. Defaults to the connection "Fader 0 dB position" setting.',
           isVisible: (options) => options["scale"] === "taper"
         },
         {
@@ -10635,6 +10677,8 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
       ovl_alpha: "1",
       selected_audio_ch: "",
       ...emptySourceVars(),
+      ...emptyVolumeVars(),
+      ...emptyFaderPosVars(),
       ...emptyProductionSlotVars()
     });
     this.updateStatus(import_base3.InstanceStatus.Connecting, "Loading productions");
@@ -10669,6 +10713,16 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
         default: "",
         width: 12,
         tooltip: "OSC Personal Access Token \u2014 required when connecting to an OSC-hosted Open Live instance"
+      },
+      {
+        type: "number",
+        id: "faderZeroPoint",
+        label: "Fader 0 dB position (% of travel)",
+        default: 75,
+        min: 10,
+        max: 99,
+        width: 6,
+        tooltip: 'Physical fader position (as % of travel) where the fader marks 0 dB. Used by the "Tapered dB" input scale and the fader_pos motor-feedback variables. Default 75% for Waves FIT / MCU-style faders.'
       }
     ];
   }
@@ -10812,7 +10866,7 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
   _registerLandingMode() {
     this.setVariableDefinitions(getVariableDefinitions());
     this.setActionDefinitions(
-      getActionDefinitions(() => this.wsClient, null, () => this.state, this._callbacks())
+      getActionDefinitions(() => this.wsClient, null, () => this.state, this._callbacks(), () => this.config)
     );
     this.setFeedbackDefinitions(getFeedbackDefinitions(() => this.state, null));
     const { back_to_productions, ...restControlPresets } = getControlPresets(null);
@@ -10830,6 +10884,8 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
       ftb_active: "false",
       ovl_alpha: "1",
       ...emptySourceVars(),
+      ...emptyVolumeVars(),
+      ...emptyFaderPosVars(),
       ...productionSlotVarsFromList(this.state.productions)
     });
     this.checkFeedbacks("production_slot_occupied", "production_slot_has_peers", "audio_ch_inactive");
@@ -10838,7 +10894,13 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
     this.state.audioChannelCount = this.audioSources.length;
     this.setVariableDefinitions(getVariableDefinitions());
     this.setActionDefinitions(
-      getActionDefinitions(() => this.wsClient, this.selectedProduction, () => this.state, this._callbacks())
+      getActionDefinitions(
+        () => this.wsClient,
+        this.selectedProduction,
+        () => this.state,
+        this._callbacks(),
+        () => this.config
+      )
     );
     this.setFeedbackDefinitions(getFeedbackDefinitions(() => this.state, this.selectedProduction));
     const { back_to_productions, ...restControlPresets } = getControlPresets(this.selectedProduction);
@@ -10861,7 +10923,9 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
       ftb_active: "false",
       ovl_alpha: "1",
       ...sourceVarsFromList(this.selectedProduction?.sources ?? []),
-      ...audioChannelVars
+      ...audioChannelVars,
+      ...volumeVarsFromState(this.state.audioChannels),
+      ...faderPosVarsFromState(this.state.audioChannels, this.config.faderZeroPoint ?? 75)
     });
     this.log("debug", `Control mode registered \u2014 forcing checkFeedbacks`);
     this.checkFeedbacks("pgm_tally", "pvw_tally", "on_air", "ftb_active", "dsk_configured", "dsk_visible", "audio_muted", "audio_ch_inactive", "audio_ch_selected", "audio_muted_x");
@@ -10937,6 +11001,11 @@ var OpenLiveInstance = class extends import_base3.InstanceBase {
         const ch = this.state.audioChannels[msg.elementId] ?? { volume: 1, muted: false };
         if (msg.property === "volume") {
           this.state.audioChannels[msg.elementId] = { ...ch, volume: msg.value };
+          const volume = msg.value;
+          this.setVariableValues({
+            [`${msg.elementId}_volume`]: String(volume),
+            [`${msg.elementId}_fader_pos`]: String(volumeToFaderPos(volume, this.config.faderZeroPoint ?? 75))
+          });
         } else if (msg.property === "mute") {
           this.state.audioChannels[msg.elementId] = { ...ch, muted: msg.value };
           this.checkFeedbacks("audio_muted");
