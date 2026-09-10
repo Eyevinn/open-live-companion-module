@@ -6,7 +6,7 @@ import {
 } from '@companion-module/base'
 import { WsClient } from './ws-client.js'
 import { getSat, invalidateSat } from './sat.js'
-import { getVariableDefinitions, emptySourceVars, sourceVarsFromList, emptyProductionSlotVars, productionSlotVarsFromList } from './variables.js'
+import { getVariableDefinitions, emptySourceVars, sourceVarsFromList, emptyProductionSlotVars, productionSlotVarsFromList, emptyVolumeVars, volumeVarsFromState, emptyFaderPosVars, faderPosVarsFromState, volumeToFaderPos, emptyMuteVars, muteVarsFromState } from './variables.js'
 import { getActionDefinitions, type ActionCallbacks } from './actions.js'
 import { getFeedbackDefinitions } from './feedbacks.js'
 import { getLandingPresets, getControlPresets } from './presets.js'
@@ -14,6 +14,7 @@ import { getLandingPresets, getControlPresets } from './presets.js'
 export interface ModuleConfig {
 	apiUrl: string
 	oscPat?: string
+	faderZeroPoint?: number
 }
 
 export interface ProductionSource {
@@ -99,6 +100,9 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			ovl_alpha: '1',
 			selected_audio_ch: '',
 			...emptySourceVars(),
+			...emptyVolumeVars(),
+			...emptyFaderPosVars(),
+			...emptyMuteVars(),
 			...emptyProductionSlotVars(),
 		})
 		this.updateStatus(InstanceStatus.Connecting, 'Loading productions')
@@ -136,6 +140,16 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 				default: '',
 				width: 12,
 				tooltip: 'OSC Personal Access Token — required when connecting to an OSC-hosted Open Live instance',
+			},
+			{
+				type: 'number',
+				id: 'faderZeroPoint',
+				label: 'Fader 0 dB position (% of travel)',
+				default: 75,
+				min: 10,
+				max: 99,
+				width: 6,
+				tooltip: 'Physical fader position (as % of travel) where the fader marks 0 dB. Used by the "Tapered dB" input scale and the fader_pos motor-feedback variables. Default 75% for Waves FIT / MCU-style faders.',
 			},
 		]
 	}
@@ -318,7 +332,7 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 	private _registerLandingMode(): void {
 		this.setVariableDefinitions(getVariableDefinitions())
 		this.setActionDefinitions(
-			getActionDefinitions(() => this.wsClient, null, () => this.state, this._callbacks()),
+			getActionDefinitions(() => this.wsClient, null, () => this.state, this._callbacks(), () => this.config),
 		)
 		this.setFeedbackDefinitions(getFeedbackDefinitions(() => this.state, null))
 		const { back_to_productions, ...restControlPresets } = getControlPresets(null)
@@ -336,6 +350,9 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			ftb_active: 'false',
 			ovl_alpha: '1',
 			...emptySourceVars(),
+			...emptyVolumeVars(),
+			...emptyFaderPosVars(),
+			...emptyMuteVars(),
 			...productionSlotVarsFromList(this.state.productions),
 		})
 		this.checkFeedbacks('production_slot_occupied', 'production_slot_has_peers', 'audio_ch_inactive')
@@ -347,7 +364,13 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 		this.state.audioChannelCount = this.audioSources.length
 		this.setVariableDefinitions(getVariableDefinitions())
 		this.setActionDefinitions(
-			getActionDefinitions(() => this.wsClient, this.selectedProduction, () => this.state, this._callbacks()),
+			getActionDefinitions(
+				() => this.wsClient,
+				this.selectedProduction,
+				() => this.state,
+				this._callbacks(),
+				() => this.config,
+			),
 		)
 		this.setFeedbackDefinitions(getFeedbackDefinitions(() => this.state, this.selectedProduction))
 		const { back_to_productions, ...restControlPresets } = getControlPresets(this.selectedProduction)
@@ -371,6 +394,9 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 			ovl_alpha: '1',
 			...sourceVarsFromList(this.selectedProduction?.sources ?? []),
 			...audioChannelVars,
+			...volumeVarsFromState(this.state.audioChannels),
+			...faderPosVarsFromState(this.state.audioChannels, this.config.faderZeroPoint ?? 75),
+			...muteVarsFromState(this.state.audioChannels),
 		})
 		// Force Companion to re-evaluate all feedbacks now that definitions are registered.
 		this.log('debug', `Control mode registered — forcing checkFeedbacks`)
@@ -463,8 +489,17 @@ class OpenLiveInstance extends InstanceBase<ModuleConfig> {
 				const ch = this.state.audioChannels[msg.elementId] ?? { volume: 1, muted: false }
 				if (msg.property === 'volume') {
 					this.state.audioChannels[msg.elementId] = { ...ch, volume: msg.value as number }
+					// Expose the fader level (and matching motor position) so motorised-fader
+					// feedback triggers can react without expression variables.
+					const volume = msg.value as number
+					this.setVariableValues({
+						[`${msg.elementId}_volume`]: String(volume),
+						[`${msg.elementId}_fader_pos`]: String(volumeToFaderPos(volume, this.config.faderZeroPoint ?? 75)),
+					})
 				} else if (msg.property === 'mute') {
 					this.state.audioChannels[msg.elementId] = { ...ch, muted: msg.value as boolean }
+					// Expose mute state so a trigger can light a hardware mute-button LED
+					this.setVariableValues({ [`${msg.elementId}_muted`]: String(msg.value) })
 					this.checkFeedbacks('audio_muted')
 				}
 				break
