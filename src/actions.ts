@@ -1,6 +1,6 @@
 import type { CompanionActionDefinitions } from '@companion-module/base'
 import type { WsClient } from './ws-client.js'
-import type { ProductionDoc, ModuleState } from './main.js'
+import type { ProductionDoc, ModuleState, ModuleConfig } from './main.js'
 
 export interface ActionCallbacks {
 	selectProduction: (id: string) => void
@@ -28,6 +28,7 @@ export function getActionDefinitions(
 	production: ProductionDoc | null,
 	getState: () => ModuleState,
 	callbacks: ActionCallbacks,
+	getConfig: () => ModuleConfig,
 ): CompanionActionDefinitions {
 	function send(msg: Parameters<WsClient['send']>[0]): void {
 		const client = getWsClient()
@@ -37,6 +38,47 @@ export function getActionDefinitions(
 	/** Resolve a 1-based sourceIndex to the production source's mixerInput. Returns null if out of range. */
 	function resolveMixerInput(sourceIndex: number): string | null {
 		return production?.sources[sourceIndex - 1]?.mixerInput ?? null
+	}
+
+	/** Parse a (possibly variable-resolved) string to a finite number. Returns NaN if unparseable. */
+	function parseNumber(raw: string): number {
+		const trimmed = raw.trim().replace(/,/g, '')
+		if (trimmed === '') return NaN
+		const n = Number(trimmed)
+		return Number.isFinite(n) ? n : NaN
+	}
+
+	/**
+	 * Scale an incoming fader value into the Open Live volume range (0.0–10.0, 1.0 = unity).
+	 * Supports percentages, 14-bit MIDI faders, floats, dB, and raw gain. Returns null if
+	 * the input cannot be parsed to a finite number.
+	 */
+	function scaleVolume(raw: string, scale: string, zeroPoint = 75): number | null {
+		const n = parseNumber(raw)
+		if (Number.isNaN(n)) return null
+		switch (scale) {
+			case 'midi14':
+				return n / 16383
+			case 'midi7':
+				return n / 127
+			case 'float':
+				return n
+			case 'db':
+				return Math.pow(10, n / 20)
+			case 'taper': {
+				// Tapered fader: 0 dB (unity) sits at the configured physical position
+				// (default 75% of travel for the Waves FIT), the bottom is ~-60 dB (mute) and
+				// the top is +20 dB — so the physical fader's bottom and 0 dB mark line up with
+				// OpenLive's bottom and 0 dB. dB = 20*(p - z)/(1 - z), gain = 10^(dB/20).
+				const z = Math.max(0.1, Math.min(0.99, (zeroPoint || 75) / 100))
+				return Math.pow(10, (n / 16383 - z) / (1 - z))
+			}
+			case 'raw':
+				return n
+			case 'percent':
+			default:
+				return n / 100
+		}
 	}
 
 	const transitionTypeChoices = [
@@ -431,6 +473,84 @@ export function getActionDefinitions(
 					return
 				}
 				if (ch?.muted) send({ type: 'AUDIO_SET', elementId, property: 'mute', value: false })
+				send({ type: 'AUDIO_SET', elementId, property: 'volume', value: volume })
+			},
+		},
+
+		set_audio_volume: {
+			name: 'Set Audio Volume (Absolute)',
+			description: 'Set an audio channel fader to an absolute level in a single shot. Feed it a Companion variable from a MIDI/OSC fader module (e.g. $(FIT_faders_1-8:lastValue)) for 1:1 motorised-fader synchronisation.',
+			options: [
+				{
+					id: 'elementId',
+					type: 'textinput',
+					label: 'Channel ID (ch1, ch2… or main; leave empty for selected channel)',
+					default: 'ch1',
+				},
+				{
+					id: 'value',
+					type: 'textinput',
+					label: 'Fader value (number or variable)',
+					default: '50',
+				},
+				{
+					id: 'scale',
+					type: 'dropdown',
+					label: 'Input scale',
+					choices: [
+						{ id: 'percent', label: 'Percentage (0–100)' },
+						{ id: 'midi7',   label: 'MIDI CC / 7-bit (0–127)' },
+						{ id: 'midi14',  label: 'MIDI 14-bit / Pitch Wheel (0–16383)' },
+						{ id: 'taper',   label: 'Tapered dB (0 dB at zero point)' },
+						{ id: 'float',   label: 'Float (0.0–1.0)' },
+						{ id: 'db',      label: 'Decibels (−60 to 0 dB)' },
+						{ id: 'raw',     label: 'Raw gain (0.0–10.0)' },
+					],
+					default: 'percent',
+				},
+				{
+					id: 'zeroPoint',
+					type: 'number',
+					label: '0 dB position (% of fader travel)',
+					default: getConfig().faderZeroPoint ?? 75,
+					min: 10,
+					max: 99,
+					tooltip: 'Physical fader position (as % of travel) where the fader marks 0 dB. Only used with the "Tapered dB" scale. Defaults to the connection "Fader 0 dB position" setting.',
+					isVisible: (options) => options['scale'] === 'taper',
+				},
+				{
+					id: 'unmute',
+					type: 'checkbox',
+					label: 'Unmute when moving above zero',
+					default: true,
+				},
+			],
+			callback: (action) => {
+				// Empty elementId targets whichever channel was last picked via
+				// "Set Selected Audio Channel" (the X-button pattern).
+				let elementId = String(action.options['elementId'] ?? '').trim()
+				if (!elementId) elementId = getState().selectedAudioCh
+				if (!elementId) return
+
+				const value = scaleVolume(
+					String(action.options['value'] ?? ''),
+					String(action.options['scale'] ?? 'percent'),
+					Number(action.options['zeroPoint'] ?? 75),
+				)
+				if (value === null) return
+
+				const volume = Math.max(0.0001, Math.min(10.0, value))
+				const atFloor = volume <= 0.0001
+				const ch = getState().audioChannels[elementId]
+
+				// Fader fully down — silence the strip the same way the nudge action does.
+				if (atFloor) {
+					if (!ch?.muted) send({ type: 'AUDIO_SET', elementId, property: 'mute', value: true })
+					return
+				}
+				if (Boolean(action.options['unmute']) && ch?.muted) {
+					send({ type: 'AUDIO_SET', elementId, property: 'mute', value: false })
+				}
 				send({ type: 'AUDIO_SET', elementId, property: 'volume', value: volume })
 			},
 		},
